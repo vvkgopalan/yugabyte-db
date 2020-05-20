@@ -1370,6 +1370,27 @@ void MasterPathHandlers::HandleDumpEntities(const Webserver::WebRequest& req,
   }
 }
 
+void MasterPathHandlers::HandleCheckIfLeader(const Webserver::WebRequest& req,
+                                              stringstream* output) {
+
+  JsonWriter jw(output, JsonWriter::COMPACT);
+  jw.StartObject();
+  {
+    CatalogManager::ScopedLeaderSharedLock l(master_->catalog_manager());
+    jw.String("status");
+    // If we are not the master leader.
+    if (!l.first_failed_status().ok()) {
+      jw.String(l.first_failed_status().CodeAsString());
+      jw.EndObject();
+      return;
+    }
+
+    jw.String(l.leader_status().CodeAsString());
+    jw.EndObject();
+    return;
+  }
+}
+
 void MasterPathHandlers::HandleGetClusterConfig(
   const Webserver::WebRequest& req, stringstream* output) {
   master_->catalog_manager()->AssertLeaderLockAcquiredForReading();
@@ -1439,6 +1460,9 @@ Status MasterPathHandlers::Register(Webserver* server) {
   server->RegisterPathHandler(
       "/dump-entities", "Dump Entities",
       std::bind(&MasterPathHandlers::CallIfLeaderOrPrintRedirect, this, _1, _2, cb), false, false);
+  server->RegisterPathHandler(
+      "/api/v1/is_leader", "Leader Check",
+      std::bind(&MasterPathHandlers::HandleCheckIfLeader, this, _1, _2), false, false);
   return Status::OK();
 }
 

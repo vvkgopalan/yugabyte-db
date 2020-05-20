@@ -161,6 +161,7 @@ class MasterPathHandlers {
                           std::stringstream* output);
   void HandleGetClusterConfig(const Webserver::WebRequest& req, std::stringstream* output);
   void HandleHealthCheck(const Webserver::WebRequest& req, std::stringstream* output);
+  void HandleCheckIfLeader(const Webserver::WebRequest& req, std::stringstream* output);
 
   // Calcuates number of leaders/followers per table.
   void CalculateTabletMap(TabletCountMap* tablet_map);
