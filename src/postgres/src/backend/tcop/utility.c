@@ -196,6 +196,7 @@ check_xact_readonly(Node *parsetree)
 		case T_CreateTableAsStmt:
 		case T_RefreshMatViewStmt:
 		case T_CreateTableSpaceStmt:
+		case T_CreateTableGroupStmt:
 		case T_CreateTransformStmt:
 		case T_CreateTrigStmt:
 		case T_CompositeTypeStmt:
@@ -206,6 +207,7 @@ check_xact_readonly(Node *parsetree)
 		case T_DropStmt:
 		case T_DropdbStmt:
 		case T_DropTableSpaceStmt:
+		case T_DropTableGroupStmt:
 		case T_DropRoleStmt:
 		case T_GrantStmt:
 		case T_GrantRoleStmt:

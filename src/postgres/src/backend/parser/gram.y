@@ -293,13 +293,13 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		CreateDomainStmt CreateExtensionStmt CreateGroupStmt CreateOpClassStmt
 		CreateOpFamilyStmt AlterOpFamilyStmt CreatePLangStmt
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateStatsStmt CreateTableSpaceStmt
-		CreateFdwStmt CreateForeignServerStmt CreateForeignTableStmt
+		CreateFdwStmt CreateForeignServerStmt CreateForeignTableStmt CreateTableGroupStmt
 		CreateAssertStmt CreateTransformStmt CreateTrigStmt CreateEventTrigStmt
 		CreateUserStmt CreateUserMappingStmt CreateRoleStmt CreatePolicyStmt
 		CreatedbStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
 		DropOpClassStmt DropOpFamilyStmt DropPLangStmt DropStmt
 		DropAssertStmt DropCastStmt DropRoleStmt
-		DropdbStmt DropTableSpaceStmt
+		DropdbStmt DropTableSpaceStmt DropTableGroupStmt
 		DropTransformStmt
 		DropUserMappingStmt ExplainStmt FetchStmt
 		GrantStmt GrantRoleStmt ImportForeignSchemaStmt IndexStmt InsertStmt
@@ -583,6 +583,8 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <rolespec> OptTableSpaceOwner
 %type <ival>	opt_check_option
 
+%type <str>		OptTableGroup
+
 %type <splitopt> OptSplit SplitClause
 
 %type <str>		opt_provider security_label
@@ -717,8 +719,8 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	START STATEMENT STATISTICS STDIN STDOUT STORAGE STRICT_P STRIP_P
 	SUBSCRIPTION SUBSTRING SYMMETRIC SYSID SYSTEM_P
 
-	TABLE TABLES TABLESAMPLE TABLESPACE TABLETS TEMP TEMPLATE TEMPORARY TEXT_P THEN
-	TIES TIME TIMESTAMP TO TRAILING TRANSACTION TRANSFORM
+	TABLE TABLEGROUP TABLES TABLESAMPLE TABLESPACE TABLETS TEMP TEMPLATE TEMPORARY
+	TEXT_P THEN TIES TIME TIMESTAMP TO TRAILING TRANSACTION TRANSFORM
 	TREAT TRIGGER TRIM TRUE_P
 	TRUNCATE TRUSTED TYPE_P TYPES_P
 
@@ -947,6 +949,8 @@ stmt :
 			| ReassignOwnedStmt { parser_ybc_beta_feature(@1, "roles"); }
 			| RevokeRoleStmt { parser_ybc_beta_feature(@1, "roles"); }
 			| VacuumStmt { parser_ybc_beta_feature(@1, "vacuum"); }
+			| CreateTableGroupStmt { parser_ybc_beta_feature(@1, "tablegroup"); }
+			| DropTableGroupStmt { parser_ybc_beta_feature(@1, "tablegroup"); }
 
 			/* Not supported in template0/template1 statements */
 			| CreateAsStmt { parser_ybc_not_support_in_templates(@1, "This statement"); }
@@ -3354,7 +3358,8 @@ copy_generic_opt_arg_list_item:
  *****************************************************************************/
 
 CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
-			OptInherit OptPartitionSpec OptWith OnCommitOption OptTableSpace OptSplit
+			OptInherit OptPartitionSpec OptWith OnCommitOption OptTableSpace
+			OptSplit OptTableGroup
 				{
 					CreateStmt *n = makeNode(CreateStmt);
 					$4->relpersistence = $2;
@@ -3369,6 +3374,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->tablespacename = $12;
 					n->if_not_exists = false;
 					n->split_options = $13;
+					n->tablegroupname = $14;
 					if ($13 && $2 == RELPERSISTENCE_TEMP)
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
@@ -3377,7 +3383,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name '('
 			OptTableElementList ')' OptInherit OptPartitionSpec OptWith
-			OnCommitOption OptTableSpace OptSplit
+			OnCommitOption OptTableSpace OptSplit OptTableGroup
 				{
 					CreateStmt *n = makeNode(CreateStmt);
 					$7->relpersistence = $2;
@@ -3392,6 +3398,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->tablespacename = $15;
 					n->if_not_exists = true;
 					n->split_options = $16;
+					n->tablegroupname = $17;
 					if ($16 && $2 == RELPERSISTENCE_TEMP)
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
@@ -3400,7 +3407,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 				}
 		| CREATE OptTemp TABLE qualified_name OF any_name
 			OptTypedTableElementList OptPartitionSpec OptWith OnCommitOption
-			OptTableSpace OptSplit
+			OptTableSpace OptSplit OptTableGroup
 				{
 					CreateStmt *n = makeNode(CreateStmt);
 					$4->relpersistence = $2;
@@ -3416,6 +3423,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->tablespacename = $11;
 					n->if_not_exists = false;
 					n->split_options = $12;
+					n->tablegroupname = $13;
 					if ($12 && $2 == RELPERSISTENCE_TEMP)
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
@@ -3424,7 +3432,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name OF any_name
 			OptTypedTableElementList OptPartitionSpec OptWith OnCommitOption
-			OptTableSpace OptSplit
+			OptTableSpace OptSplit OptTableGroup
 				{
 					CreateStmt *n = makeNode(CreateStmt);
 					$7->relpersistence = $2;
@@ -3440,6 +3448,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->tablespacename = $14;
 					n->if_not_exists = true;
 					n->split_options = $15;
+					n->tablegroupname = $16;
 					if ($15 && $2 == RELPERSISTENCE_TEMP)
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
@@ -3448,7 +3457,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 				}
 		| CREATE OptTemp TABLE qualified_name PARTITION OF qualified_name
 			OptTypedTableElementList PartitionBoundSpec OptPartitionSpec OptWith
-			OnCommitOption OptTableSpace OptSplit
+			OnCommitOption OptTableSpace OptSplit OptTableGroup
 				{
 					CreateStmt *n = makeNode(CreateStmt);
 					$4->relpersistence = $2;
@@ -3464,6 +3473,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->tablespacename = $13;
 					n->if_not_exists = false;
 					n->split_options = $14;
+					n->tablegroupname = $15;
 					if ($14 && $2 == RELPERSISTENCE_TEMP)
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
@@ -3472,7 +3482,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name PARTITION OF
 			qualified_name OptTypedTableElementList PartitionBoundSpec OptPartitionSpec
-			OptWith OnCommitOption OptTableSpace OptSplit
+			OptWith OnCommitOption OptTableSpace OptSplit OptTableGroup
 				{
 					CreateStmt *n = makeNode(CreateStmt);
 					$7->relpersistence = $2;
@@ -3488,6 +3498,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->tablespacename = $16;
 					n->if_not_exists = true;
 					n->split_options = $17;
+					n->tablegroupname = $18;
 					if ($17 && $2 == RELPERSISTENCE_TEMP)
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
@@ -4217,6 +4228,11 @@ OnCommitOption:  ON COMMIT DROP				{ $$ = ONCOMMIT_DROP; }
 			| /*EMPTY*/						{ $$ = ONCOMMIT_NOOP; }
 		;
 
+OptTableGroup:
+			TABLEGROUP name { parser_ybc_signal_unsupported(@1, "TABLEGROUP", 1129); $$ = $2; }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
 OptTableSpace:
 			TABLESPACE name { parser_ybc_signal_unsupported(@1, "TABLESPACE", 1129); $$ = $2; }
 			| /*EMPTY*/								{ $$ = NULL; }
@@ -4692,6 +4708,41 @@ opt_procedural:
 			PROCEDURAL								{}
 			| /*EMPTY*/								{}
 		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             CREATE TABLEGROUP tablegroup
+ * 		
+ *		Later extend this to include COPARTITIONED and INTERLEAVED
+ *
+ *****************************************************************************/
+
+ CreateTableGroupStmt: CREATE TABLEGROUP name
+ 				{
+ 					parser_ybc_beta_feature(@1, "tablegroup");
+ 					CreateTableGroupStmt *n = makeNode(CreateTableGroupStmt);
+ 					n->tablegroupname = $3;
+ 					$$ = (Node *) n;
+ 				}
+ 		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             DROP TABLEGROUP tablegroup
+ *
+ *****************************************************************************/
+
+DropTableGroupStmt: DROP TABLEGROUP name
+ 				{
+ 					parser_ybc_beta_feature(@1, "tablegroup");
+ 					DropTableGroupStmt *n = makeNode(DropTableGroupStmt);
+ 					n->tablegroupname = $3;
+ 					$$ = (Node *) n;
+ 				}
+ 		;
+
 
 /*****************************************************************************
  *
@@ -7818,13 +7869,14 @@ defacl_privilege_target:
  *
  *		QUERY: CREATE INDEX
  *
- * Note: we cannot put TABLESPACE or SPLIT clause after WHERE clause unless we
- * are willing to make TABLESPACE or SPLIT fully reserved words.
+ * Note: we cannot put TABLESPACE / TABLEGROUP / SPLIT clause after WHERE clause
+ * unless we are willing to make them fully reserved words.
  *****************************************************************************/
 
 IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 			ON relation_expr access_method_clause '(' yb_index_params ')'
-			opt_include opt_reloptions OptTableSpace OptSplit where_clause
+			opt_include opt_reloptions OptTableSpace OptSplit
+			OptTableGroup where_clause
 				{
 					IndexStmt *n = makeNode(IndexStmt);
 					n->unique = $2;
@@ -7838,7 +7890,8 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 					n->options = $13;
 					n->tableSpace = $14;
 					n->split_options = $15;
-					n->whereClause = $16;
+					n->tablegroupname = $16;
+					n->whereClause = $17;
 					n->excludeOpNames = NIL;
 					n->idxcomment = NULL;
 					n->indexOid = InvalidOid;
@@ -7853,7 +7906,8 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 				}
 			| CREATE opt_unique INDEX opt_concurrently IF_P NOT EXISTS index_name
 			ON relation_expr access_method_clause '(' yb_index_params ')'
-			opt_include opt_reloptions OptTableSpace OptSplit where_clause
+			opt_include opt_reloptions OptTableSpace OptSplit
+			OptTableGroup where_clause
 				{
 					IndexStmt *n = makeNode(IndexStmt);
 					n->unique = $2;
@@ -7867,7 +7921,8 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 					n->options = $16;
 					n->tableSpace = $17;
 					n->split_options = $18;
-					n->whereClause = $19;
+					n->tablegroupname = $19;
+					n->whereClause = $20;
 					n->excludeOpNames = NIL;
 					n->idxcomment = NULL;
 					n->indexOid = InvalidOid;
@@ -16007,6 +16062,7 @@ unreserved_keyword:
 			| SUBSCRIPTION
 			| SYSID
 			| SYSTEM_P
+			| TABLEGROUP
 			| TABLES
 			| TABLESPACE
 			| TABLETS

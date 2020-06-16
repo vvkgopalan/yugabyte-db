@@ -1784,6 +1784,22 @@ _equalDiscardStmt(const DiscardStmt *a, const DiscardStmt *b)
 }
 
 static bool
+_equalCreateTableGroupStmt(const CreateTableGroupStmt *a, const CreateTableGroupStmt *b)
+{
+	COMPARE_STRING_FIELD(tablegroupname);
+
+	return true;
+}
+
+static bool
+_equalDropTableGroupStmt(const DropTableGroupStmt *a, const DropTableGroupStmt *b)
+{
+	COMPARE_STRING_FIELD(tablegroupname);
+
+	return true;
+}
+
+static bool
 _equalCreateTableSpaceStmt(const CreateTableSpaceStmt *a, const CreateTableSpaceStmt *b)
 {
 	COMPARE_STRING_FIELD(tablespacename);
@@ -3426,6 +3442,12 @@ equal(const void *a, const void *b)
 			retval = _equalCreateTableSpaceStmt(a, b);
 			break;
 		case T_DropTableSpaceStmt:
+			retval = _equalDropTableSpaceStmt(a, b);
+			break;
+		case T_CreateTableGroupStmt:
+			retval = _equalCreateTableSpaceStmt(a, b);
+			break;
+		case T_DropTableGroupStmt:
 			retval = _equalDropTableSpaceStmt(a, b);
 			break;
 		case T_AlterTableSpaceOptionsStmt:
