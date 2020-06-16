@@ -438,6 +438,7 @@ CreateStmt
 CreateStmtContext
 CreateSubscriptionStmt
 CreateTableAsStmt
+CreateTableGroupStmt
 CreateTableSpaceStmt
 CreateTransformStmt
 CreateTrigStmt
@@ -521,6 +522,7 @@ DropReplicationSlotCmd
 DropRoleStmt
 DropStmt
 DropSubscriptionStmt
+DropTableGroupStmt
 DropTableSpaceStmt
 DropUserMappingStmt
 DropdbStmt
