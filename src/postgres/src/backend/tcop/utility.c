@@ -544,6 +544,16 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			ExecuteDoStmt((DoStmt *) parsetree, isAtomicContext);
 			break;
 
+		case T_CreateTableGroupStmt:
+			PreventInTransactionBlock(isTopLevel, "CREATE TABLEGROUP");
+			CreateTableGroup((CreateTableGroupStmt *) parsetree);
+			break;
+
+		case T_DropTableGroupStmt:
+			PreventInTransactionBlock(isTopLevel, "DROP TABLEGROUP");
+			DropTableGroup((DropTableGroupStmt *) parsetree);
+			break;
+
 		case T_CreateTableSpaceStmt:
 			/* no event triggers for global objects */
 			PreventInTransactionBlock(isTopLevel, "CREATE TABLESPACE");
@@ -2216,6 +2226,14 @@ CreateCommandTag(Node *parsetree)
 
 		case T_CreateStmt:
 			tag = "CREATE TABLE";
+			break;
+
+		case T_CreateTableGroupStmt:
+			tag = "CREATE TABLEGROUP";
+			break;
+
+		case T_DropTableGroupStmt:
+			tag = "DROP TABLEGROUP";
 			break;
 
 		case T_CreateTableSpaceStmt:

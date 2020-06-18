@@ -3379,6 +3379,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
 					}
+					if ($14 && $2 == RELPERSISTENCE_TEMP)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TEMP table.")));
+					}
 					$$ = (Node *)n;
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name '('
@@ -3402,6 +3407,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					if ($16 && $2 == RELPERSISTENCE_TEMP)
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
+					}
+					if ($17 && $2 == RELPERSISTENCE_TEMP)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TEMP table.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -3428,6 +3438,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
 					}
+					if ($13 && $2 == RELPERSISTENCE_TEMP)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TEMP table.")));
+					}
 					$$ = (Node *)n;
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name OF any_name
@@ -3452,6 +3467,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					if ($15 && $2 == RELPERSISTENCE_TEMP)
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
+					}
+					if ($16 && $2 == RELPERSISTENCE_TEMP)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TEMP table.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -3478,6 +3498,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
 					}
+					if ($15 && $2 == RELPERSISTENCE_TEMP)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TEMP table.")));
+					}
 					$$ = (Node *)n;
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name PARTITION OF
@@ -3502,6 +3527,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					if ($17 && $2 == RELPERSISTENCE_TEMP)
 					{
 						ereport(WARNING, (errmsg("Split options on TEMP table will be ignored")));
+					}
+					if ($18 && $2 == RELPERSISTENCE_TEMP)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TEMP table.")));
 					}
 					$$ = (Node *)n;
 				}
