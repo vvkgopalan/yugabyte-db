@@ -546,12 +546,14 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 
 		case T_CreateTableGroupStmt:
 			PreventInTransactionBlock(isTopLevel, "CREATE TABLEGROUP");
-			CreateTableGroup((CreateTableGroupStmt *) parsetree);
+			//TODO
+			//CreateTableGroup((CreateTableGroupStmt *) parsetree);
 			break;
 
 		case T_DropTableGroupStmt:
 			PreventInTransactionBlock(isTopLevel, "DROP TABLEGROUP");
-			DropTableGroup((DropTableGroupStmt *) parsetree);
+			//TODO
+			//DropTableGroup((DropTableGroupStmt *) parsetree);
 			break;
 
 		case T_CreateTableSpaceStmt:

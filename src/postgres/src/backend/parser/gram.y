@@ -2770,6 +2770,8 @@ opt_reloptions:		WITH reloptions					{ $$ = $2; }
 			 |		/* EMPTY */						{ $$ = NIL; }
 		;
 
+/* TODO: add copartitioned and interleaved to reloption_list.
+   Eventually deprecate using colocated */
 reloption_list:
 			reloption_elem
 				{
@@ -3384,6 +3386,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 										errmsg("Cannot use TABLEGROUP with TEMP table.")));
 					}
+					if ($12 && $14)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+					}
 					$$ = (Node *)n;
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name '('
@@ -3412,6 +3419,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 										errmsg("Cannot use TABLEGROUP with TEMP table.")));
+					}
+					if ($15 && $17)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -3443,6 +3455,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 										errmsg("Cannot use TABLEGROUP with TEMP table.")));
 					}
+					if ($11 && $13)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+					}
 					$$ = (Node *)n;
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name OF any_name
@@ -3472,6 +3489,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 										errmsg("Cannot use TABLEGROUP with TEMP table.")));
+					}
+					if ($14 && $16)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -3503,6 +3525,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 										errmsg("Cannot use TABLEGROUP with TEMP table.")));
 					}
+					if ($13 && $15)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+					}
 					$$ = (Node *)n;
 				}
 		| CREATE OptTemp TABLE IF_P NOT EXISTS qualified_name PARTITION OF
@@ -3532,6 +3559,11 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 										errmsg("Cannot use TABLEGROUP with TEMP table.")));
+					}
+					if ($16 && $18)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -4259,7 +4291,7 @@ OnCommitOption:  ON COMMIT DROP				{ $$ = ONCOMMIT_DROP; }
 		;
 
 OptTableGroup:
-			TABLEGROUP name { parser_ybc_signal_unsupported(@1, "TABLEGROUP", 1129); $$ = $2; }
+			TABLEGROUP name { parser_ybc_beta_feature(@1, "tablegroup"); $$ = $2; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
@@ -4748,11 +4780,12 @@ opt_procedural:
  *
  *****************************************************************************/
 
- CreateTableGroupStmt: CREATE TABLEGROUP name
+ CreateTableGroupStmt: CREATE TABLEGROUP name opt_reloptions
  				{
  					parser_ybc_beta_feature(@1, "tablegroup");
  					CreateTableGroupStmt *n = makeNode(CreateTableGroupStmt);
  					n->tablegroupname = $3;
+ 					n->options = $4;
  					$$ = (Node *) n;
  				}
  		;
@@ -4764,11 +4797,12 @@ opt_procedural:
  *
  *****************************************************************************/
 
-DropTableGroupStmt: DROP TABLEGROUP name
+DropTableGroupStmt: DROP TABLEGROUP name opt_reloptions
  				{
  					parser_ybc_beta_feature(@1, "tablegroup");
  					DropTableGroupStmt *n = makeNode(DropTableGroupStmt);
  					n->tablegroupname = $3;
+ 					n->options = $4;
  					$$ = (Node *) n;
  				}
  		;
@@ -7932,6 +7966,11 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 					n->initdeferred = false;
 					n->transformed = false;
 					n->if_not_exists = false;
+					if ($14 && $16)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+					}
 					$$ = (Node *)n;
 				}
 			| CREATE opt_unique INDEX opt_concurrently IF_P NOT EXISTS index_name
@@ -7963,6 +8002,11 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 					n->initdeferred = false;
 					n->transformed = false;
 					n->if_not_exists = true;
+					if ($17 && $19)
+					{
+						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
+										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+					}
 					$$ = (Node *)n;
 				}
 		;

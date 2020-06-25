@@ -2192,12 +2192,16 @@ typedef struct OptSplit
 
 typedef struct CreateTableGroupStmt
 {
+	NodeTag		type;
 	char	   *tablegroupname;
+	List 	   *options;
 } CreateTableGroupStmt;
 
 typedef struct DropTableGroupStmt
 {
+	NodeTag		type;
 	char	   *tablegroupname;
+	List 	   *options;
 } DropTableGroupStmt;
 
 /* ----------------------
@@ -2783,7 +2787,7 @@ typedef struct IndexStmt
 	Oid			relationId;		/* OID of relation to build index on */
 	char	   *accessMethod;	/* name of access method (eg. btree) */
 	char	   *tableSpace;		/* tablespace, or NULL for default */
-	char 	   *tablegroupname; /* tablegroup name, or NULL for default */
+	char 	   *tablegroupname; /* tablegroup, or NULL for default */
 	List	   *indexParams;	/* columns to index: a list of IndexElem */
 	List	   *indexIncludingParams;	/* additional columns to index: a list
 										 * of IndexElem */

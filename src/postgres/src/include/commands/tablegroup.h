@@ -1,6 +1,6 @@
 // tablegroup.h
 //	  Commands to manipulate table groups
-// src/include/commands/tablespace.h
+// src/include/commands/tablegroup.h
 //
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
@@ -64,25 +64,10 @@ typedef struct TableSpaceOpts
 	int			effective_io_concurrency;
 } TableSpaceOpts;
 
-extern Oid	CreateTableSpace(CreateTableSpaceStmt *stmt);
-extern void DropTableSpace(DropTableSpaceStmt *stmt);
-extern ObjectAddress RenameTableSpace(const char *oldname, const char *newname);
-extern Oid	AlterTableSpaceOptions(AlterTableSpaceOptionsStmt *stmt);
+extern Oid	CreateTableGroup(CreateTableSpaceStmt *stmt);
+extern void DropTableGroup(DropTableSpaceStmt *stmt);
 
-extern void TablespaceCreateDbspace(Oid spcNode, Oid dbNode, bool isRedo);
-
-extern Oid	GetDefaultTablespace(char relpersistence);
-
-extern void PrepareTempTablespaces(void);
-
-extern Oid	get_tablespace_oid(const char *tablespacename, bool missing_ok);
+extern Oid	get_tablegroup_oid(const char *tablegroup);
 extern char *get_tablespace_name(Oid spc_oid);
-
-extern bool directory_is_empty(const char *path);
-extern void remove_tablespace_symlink(const char *linkloc);
-
-extern void tblspc_redo(XLogReaderState *rptr);
-extern void tblspc_desc(StringInfo buf, XLogReaderState *rptr);
-extern const char *tblspc_identify(uint8 info);
 
 #endif							/* TABLESPACE_H */

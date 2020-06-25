@@ -1,5 +1,6 @@
 // tablegroup.c
 //	  Commands to manipulate table groups
+// TODO: add description
 //
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
@@ -51,11 +52,11 @@
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_namespace.h"
-#include "catalog/pg_tablespace.h"
+#include "catalog/pg_tablegroup.h"
 #include "commands/comment.h"
 #include "commands/seclabel.h"
 #include "commands/tablecmds.h"
-#include "commands/tablespace.h"
+#include "commands/tablegroup.h"
 #include "common/file_perm.h"
 #include "miscadmin.h"
 #include "postmaster/bgwriter.h"
@@ -378,8 +379,8 @@ get_tablespace_name(Oid spc_oid)
 	ScanKeyData entry[1];
 
 	/*
-	 * Search pg_tablespace.  We use a heapscan here even though there is an
-	 * index on oid, on the theory that pg_tablespace will usually have just a
+	 * Search pg_tablegroup.  We use a heapscan here even though there is an
+	 * index on oid, on the theory that pg_tablegroup will usually have just a
 	 * few entries and so an indexed lookup is a waste of effort.
 	 */
 	rel = heap_open(TableSpaceRelationId, AccessShareLock);
