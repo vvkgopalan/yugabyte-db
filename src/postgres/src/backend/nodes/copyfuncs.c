@@ -3351,6 +3351,7 @@ CopyCreateStmtFields(const CreateStmt *from, CreateStmt *newnode)
 	COPY_NODE_FIELD(options);
 	COPY_SCALAR_FIELD(oncommit);
 	COPY_STRING_FIELD(tablespacename);
+	COPY_STRING_FIELD(tablegroupname);
 	COPY_SCALAR_FIELD(if_not_exists);
 	COPY_NODE_FIELD(split_options);
 }
@@ -3465,6 +3466,7 @@ _copyIndexStmt(const IndexStmt *from)
 	COPY_SCALAR_FIELD(relationId);
 	COPY_STRING_FIELD(accessMethod);
 	COPY_STRING_FIELD(tableSpace);
+	COPY_STRING_FIELD(tablegroupname);
 	COPY_NODE_FIELD(indexParams);
 	COPY_NODE_FIELD(indexIncludingParams);
 	COPY_NODE_FIELD(options);
@@ -4010,7 +4012,7 @@ _copyCreateTableGroupStmt(const CreateTableGroupStmt *from)
 	CreateTableGroupStmt *newnode = makeNode(CreateTableGroupStmt);
 
 	COPY_STRING_FIELD(tablegroupname);
-
+	COPY_NODE_FIELD(options);
 	return newnode;
 }
 
@@ -4020,7 +4022,6 @@ _copyDropTableGroupStmt(const DropTableGroupStmt *from)
 	DropTableGroupStmt *newnode = makeNode(DropTableGroupStmt);
 
 	COPY_STRING_FIELD(tablegroupname);
-
 	return newnode;
 }
 

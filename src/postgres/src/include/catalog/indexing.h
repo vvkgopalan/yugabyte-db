@@ -239,6 +239,9 @@ DECLARE_UNIQUE_INDEX(pg_tablespace_oid_index, 2697, on pg_tablespace using btree
 DECLARE_UNIQUE_INDEX(pg_tablespace_spcname_index, 2698, on pg_tablespace using btree(spcname name_ops));
 #define TablespaceNameIndexId  2698
 
+DECLARE_UNIQUE_INDEX(pg_tablegroup_oid_index, 9001, on pg_tablegroup using btree(oid oid_ops));
+#define TablegroupOidIndexId  9001
+
 DECLARE_UNIQUE_INDEX(pg_transform_oid_index, 3574, on pg_transform using btree(oid oid_ops));
 #define TransformOidIndexId 3574
 DECLARE_UNIQUE_INDEX(pg_transform_type_lang_index, 3575, on pg_transform using btree(trftype oid_ops, trflang oid_ops));

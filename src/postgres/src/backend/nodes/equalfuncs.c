@@ -1239,6 +1239,7 @@ _equalCreateStmt(const CreateStmt *a, const CreateStmt *b)
 	COMPARE_NODE_FIELD(options);
 	COMPARE_SCALAR_FIELD(oncommit);
 	COMPARE_STRING_FIELD(tablespacename);
+	COMPARE_STRING_FIELD(tablegroupname);
 	COMPARE_SCALAR_FIELD(if_not_exists);
 
 	return true;
@@ -1328,6 +1329,7 @@ _equalIndexStmt(const IndexStmt *a, const IndexStmt *b)
 	COMPARE_SCALAR_FIELD(relationId);
 	COMPARE_STRING_FIELD(accessMethod);
 	COMPARE_STRING_FIELD(tableSpace);
+	COMPARE_STRING_FIELD(tablegroupname);
 	COMPARE_NODE_FIELD(indexParams);
 	COMPARE_NODE_FIELD(indexIncludingParams);
 	COMPARE_NODE_FIELD(options);
@@ -1787,7 +1789,7 @@ static bool
 _equalCreateTableGroupStmt(const CreateTableGroupStmt *a, const CreateTableGroupStmt *b)
 {
 	COMPARE_STRING_FIELD(tablegroupname);
-
+	COMPARE_NODE_FIELD(options);
 	return true;
 }
 
@@ -1795,7 +1797,7 @@ static bool
 _equalDropTableGroupStmt(const DropTableGroupStmt *a, const DropTableGroupStmt *b)
 {
 	COMPARE_STRING_FIELD(tablegroupname);
-
+	COMPARE_NODE_FIELD(options);
 	return true;
 }
 
