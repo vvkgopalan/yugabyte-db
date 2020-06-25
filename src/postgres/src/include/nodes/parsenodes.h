@@ -2186,7 +2186,7 @@ typedef struct OptSplit
 } OptSplit;
 
 /* ----------------------
- *		Create/Drop Table Space Statements
+ *		Create/Drop Table Group Statements
  * ----------------------
  */
 
