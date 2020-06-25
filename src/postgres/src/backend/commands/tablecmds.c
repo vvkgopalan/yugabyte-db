@@ -549,7 +549,6 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	Oid			namespaceId;
 	Oid			relationId = InvalidOid;
 	Oid			tablespaceId;
-	//Oid 		tablegroupId;
 	Relation	rel;
 	TupleDesc	descriptor;
 	List	   *inheritOids;
@@ -621,11 +620,6 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		tablespaceId = GetDefaultTablespace(stmt->relation->relpersistence);
 		/* note InvalidOid is OK in this case */
 	}
-
-	/*if (stmt->tablegroupname)
-	{
-
-	}*/
 
 	/* Check permissions except when using database's default */
 	if (OidIsValid(tablespaceId) && tablespaceId != MyDatabaseTableSpace)
