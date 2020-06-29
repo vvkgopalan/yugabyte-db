@@ -234,7 +234,7 @@ get_tablegroup_oid(const char *tablegroupname)
  * Returns a palloc'd string, or NULL if no such tablespace.
  */
 char *
-get_tablespace_name(Oid spc_oid)
+get_tablespace_name(Oid grp_oid)
 {
 	char	   *result;
 	Relation	rel;
