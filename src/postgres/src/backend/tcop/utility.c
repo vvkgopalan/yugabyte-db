@@ -52,6 +52,7 @@
 #include "commands/subscriptioncmds.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "commands/tablegroup.h"
 #include "commands/trigger.h"
 #include "commands/typecmds.h"
 #include "commands/user.h"
@@ -546,14 +547,13 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 
 		case T_CreateTableGroupStmt:
 			PreventInTransactionBlock(isTopLevel, "CREATE TABLEGROUP");
-			//TODO
-			//CreateTableGroup((CreateTableGroupStmt *) parsetree);
+			CreateTableGroup((CreateTableGroupStmt *) parsetree);
 			break;
 
 		case T_DropTableGroupStmt:
 			PreventInTransactionBlock(isTopLevel, "DROP TABLEGROUP");
 			//TODO
-			//DropTableGroup((DropTableGroupStmt *) parsetree);
+			DropTableGroup((DropTableGroupStmt *) parsetree);
 			break;
 
 		case T_CreateTableSpaceStmt:
