@@ -93,7 +93,7 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 	/*
 	 * Check that there is no other tablegroup by this name.
 	 */
-	if (OidIsValid(get_tablegroup_oid(stmt->tablegroupname, true)))
+	if (OidIsValid(get_tablegroup_oid(stmt->tablegroupname)))
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("tablegroup \"%s\" already exists",
@@ -135,7 +135,7 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
  * Permissions? Must be owner?
  */
 void
-DropTableSpace(DropTableGroupStmt *stmt)
+DropTableGroup(DropTableGroupStmt *stmt)
 {
 	char	   *tablegroupname = stmt->tablegroupname;
 	HeapScanDesc scandesc;
@@ -165,19 +165,19 @@ DropTableSpace(DropTableGroupStmt *stmt)
 		return;
 	}
 
-	tablespaceoid = HeapTupleGetOid(tuple);
+	tablegroupoid = HeapTupleGetOid(tuple);
 
-	/* DROP hook for the tablespace being removed */
+	/* DROP hook for the tablegroup being removed */
 	InvokeObjectDropHook(TableGroupRelationId, tablegroupoid, 0);
 
 	/*
-	 * Remove the pg_tablespace tuple (this will roll back if we fail below)
+	 * Remove the pg_tablegroup tuple (this will roll back if we fail below)
 	 */
 	CatalogTupleDelete(rel, tuple);
 
 	heap_endscan(scandesc);
 
-	/* We keep the lock on pg_tablespace until commit */
+	/* We keep the lock on pg_tablegroup until commit */
 	heap_close(rel, NoLock);
 }
 
@@ -197,8 +197,8 @@ get_tablegroup_oid(const char *tablegroupname)
 	ScanKeyData entry[1];
 
 	/*
-	 * Search pg_tablespace.  We use a heapscan here even though there is an
-	 * index on name, on the theory that pg_tablespace will usually have just
+	 * Search pg_tablegroup.  We use a heapscan here even though there is an
+	 * index on name, on the theory that pg_tablegroup will usually have just
 	 * a few entries and so an indexed lookup is a waste of effort.
 	 */
 	rel = heap_open(TableGroupRelationId, AccessShareLock);
@@ -206,7 +206,7 @@ get_tablegroup_oid(const char *tablegroupname)
 	ScanKeyInit(&entry[0],
 				Anum_pg_tablegroup_grpname,
 				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(tablegroup));
+				CStringGetDatum(tablegroupname));
 	scandesc = heap_beginscan_catalog(rel, 1, entry);
 	tuple = heap_getnext(scandesc, ForwardScanDirection);
 
@@ -219,22 +219,16 @@ get_tablegroup_oid(const char *tablegroupname)
 	heap_endscan(scandesc);
 	heap_close(rel, AccessShareLock);
 
-	if (!OidIsValid(result))
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("tablespace \"%s\" does not exist",
-						tablegroupname)));
-
 	return result;
 }
 
 /*
- * get_tablespace_name - given a tablespace OID, look up the name
+ * get_tablegroup_name - given a tablegroup OID, look up the name
  *
- * Returns a palloc'd string, or NULL if no such tablespace.
+ * Returns a palloc'd string, or NULL if no such tablegroup.
  */
 char *
-get_tablespace_name(Oid grp_oid)
+get_tablegroup_name(Oid grp_oid)
 {
 	char	   *result;
 	Relation	rel;
