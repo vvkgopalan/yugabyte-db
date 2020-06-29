@@ -36,38 +36,14 @@
 #ifndef TABLEGROUP_H
 #define TABLEGROUP_H
 
-#include "access/xlogreader.h"
 #include "catalog/objectaddress.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 
-/* XLOG stuff */
-#define XLOG_TBLGRP_CREATE		0x00
-#define XLOG_TBLGRP_DROP		0x10
+extern Oid	CreateTableGroup(CreateTableGroupStmt *stmt);
+extern void DropTableGroup(DropTableGroupStmt *stmt);
 
-typedef struct xl_tblspc_create_rec
-{
-	Oid			ts_id;
-	char		ts_path[FLEXIBLE_ARRAY_MEMBER]; /* null-terminated string */
-} xl_tblspc_create_rec;
-
-typedef struct xl_tblspc_drop_rec
-{
-	Oid			ts_id;
-} xl_tblspc_drop_rec;
-
-typedef struct TableSpaceOpts
-{
-	int32		vl_len_;		/* varlena header (do not touch directly!) */
-	float8		random_page_cost;
-	float8		seq_page_cost;
-	int			effective_io_concurrency;
-} TableSpaceOpts;
-
-extern Oid	CreateTableGroup(CreateTableSpaceStmt *stmt);
-extern void DropTableGroup(DropTableSpaceStmt *stmt);
-
-extern Oid	get_tablegroup_oid(const char *tablegroup);
-extern char *get_tablespace_name(Oid spc_oid);
+extern Oid	get_tablegroup_oid(const char *tablegroupname);
+extern char *get_tablegroup_name(Oid grp_oid);
 
 #endif							/* TABLESPACE_H */
