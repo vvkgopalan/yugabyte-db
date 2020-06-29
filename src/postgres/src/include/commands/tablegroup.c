@@ -73,16 +73,8 @@
 #include "utils/tqual.h"
 #include "utils/varlena.h"
 
-
-/* GUC variables */
-char	   *default_tablegroup = NULL;
-
 /*
  * Create a table group
- *
- * Only superusers can create a tablespace. This seems a reasonable restriction
- * since we're determining the system layout and, anyway, we probably have
- * root if we're doing this kind of activity
  */
 Oid
 CreateTableGroup(CreateTableGroupStmt *stmt)
@@ -93,19 +85,19 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 	HeapTuple	tuple;
 	Oid			tablegroupoid;
 
-	// TODO: Any need to check permissions?
+	// TODO: Any need to check permissions? acl?
 	// TODO: Any need to have a tablegroup owner?
 
+	// TODO: what needs to be done in aclchk.c?
+
 	/*
-	 * Check that there is no other tablegroup by this name.  (The unique
-	 * index would catch this anyway, but might as well give a friendlier
-	 * message.)
+	 * Check that there is no other tablegroup by this name.
 	 */
 	if (OidIsValid(get_tablegroup_oid(stmt->tablegroupname, true)))
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("tablespace \"%s\" already exists",
-						stmt->tablespacename)));
+				 errmsg("tablegroup \"%s\" already exists",
+						stmt->tablegroupname)));
 
 	/*
 	 * Insert tuple into pg_tablegroup.  The purpose of doing this first is to
@@ -116,115 +108,67 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 
 	MemSet(nulls, false, sizeof(nulls));
 
-	values[Anum_pg_tablespace_spcname - 1] =
-		DirectFunctionCall1(namein, CStringGetDatum(stmt->tablespacename));
-	values[Anum_pg_tablespace_spcowner - 1] =
-		ObjectIdGetDatum(ownerId);
-	nulls[Anum_pg_tablespace_spcacl - 1] = true;
+	values[Anum_pg_tablegroup_grpname - 1] =
+		DirectFunctionCall1(namein, CStringGetDatum(stmt->tablegroupname));
 
-	/* Generate new proposed spcoptions (text array) */
-	newOptions = transformRelOptions((Datum) 0,
-									 stmt->options,
-									 NULL, NULL, false, false);
-	(void) tablespace_reloptions(newOptions, true);
-	if (newOptions != (Datum) 0)
-		values[Anum_pg_tablespace_spcoptions - 1] = newOptions;
-	else
-		nulls[Anum_pg_tablespace_spcoptions - 1] = true;
+	/* Generate new proposed grpoptions (text array) */
+	/* For now no grpoptions. Will be part of Interleaved/Copartitioned */
+	
+	nulls[Anum_pg_tablegroup_grpoptions - 1] = true;
 
 	tuple = heap_form_tuple(rel->rd_att, values, nulls);
 
-	tablespaceoid = CatalogTupleInsert(rel, tuple);
+	tablegroupoid = CatalogTupleInsert(rel, tuple);
 
 	heap_freetuple(tuple);
 
-	/* Post creation hook for new tablespace */
-	InvokeObjectPostCreateHook(TableSpaceRelationId, tablespaceoid, 0);
-
-	/* Record the filesystem change in XLOG */
-	{
-		xl_tblspc_create_rec xlrec;
-
-		xlrec.ts_id = tablespaceoid;
-
-		XLogBeginInsert();
-		XLogRegisterData((char *) &xlrec,
-						 offsetof(xl_tblspc_create_rec, ts_path));
-		XLogRegisterData((char *) location, strlen(location) + 1);
-
-		(void) XLogInsert(RM_TBLSPC_ID, XLOG_TBLSPC_CREATE);
-	}
-
-
-	/* We keep the lock on pg_tablespace until commit */
+	/* We keep the lock on pg_tablegroup until commit */
 	heap_close(rel, NoLock);
 
-	return tablespaceoid;
+	return tablegroupoid;
 }
 
 /*
- * Drop a table space
+ * Drop a tablegroup
  *
- * Be careful to check that the tablespace is empty.
+ * What about empty vs non-empty tablegroup?
+ * Permissions? Must be owner?
  */
 void
-DropTableSpace(DropTableSpaceStmt *stmt)
+DropTableSpace(DropTableGroupStmt *stmt)
 {
-	char	   *tablespacename = stmt->tablespacename;
+	char	   *tablegroupname = stmt->tablegroupname;
 	HeapScanDesc scandesc;
 	Relation	rel;
 	HeapTuple	tuple;
 	ScanKeyData entry[1];
-	Oid			tablespaceoid;
+	Oid			tablegroupoid;
 
 	/*
 	 * Find the target tuple
 	 */
-	rel = heap_open(TableSpaceRelationId, RowExclusiveLock);
+	rel = heap_open(TableGroupRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&entry[0],
-				Anum_pg_tablespace_spcname,
+				Anum_pg_tablegroup_grpname,
 				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(tablespacename));
+				CStringGetDatum(tablegroupname));
 	scandesc = heap_beginscan_catalog(rel, 1, entry);
 	tuple = heap_getnext(scandesc, ForwardScanDirection);
 
 	if (!HeapTupleIsValid(tuple))
 	{
-		if (!stmt->missing_ok)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("tablespace \"%s\" does not exist",
-							tablespacename)));
-		}
-		else
-		{
-			ereport(NOTICE,
-					(errmsg("tablespace \"%s\" does not exist, skipping",
-							tablespacename)));
-			/* XXX I assume I need one or both of these next two calls */
-			heap_endscan(scandesc);
-			heap_close(rel, NoLock);
-		}
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("tablegroup \"%s\" does not exist",
+						tablegroupname)));
 		return;
 	}
 
 	tablespaceoid = HeapTupleGetOid(tuple);
 
-	/* Must be tablespace owner */
-	if (!pg_tablespace_ownercheck(tablespaceoid, GetUserId()))
-		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLESPACE,
-					   tablespacename);
-
-	/* Disallow drop of the standard tablespaces, even by superuser */
-	if (tablespaceoid == GLOBALTABLESPACE_OID ||
-		tablespaceoid == DEFAULTTABLESPACE_OID)
-		aclcheck_error(ACLCHECK_NO_PRIV, OBJECT_TABLESPACE,
-					   tablespacename);
-
 	/* DROP hook for the tablespace being removed */
-	InvokeObjectDropHook(TableSpaceRelationId, tablespaceoid, 0);
+	InvokeObjectDropHook(TableGroupRelationId, tablegroupoid, 0);
 
 	/*
 	 * Remove the pg_tablespace tuple (this will roll back if we fail below)
@@ -233,98 +177,18 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 
 	heap_endscan(scandesc);
 
-	/*
-	 * Remove any comments or security labels on this tablespace.
-	 */
-	DeleteSharedComments(tablespaceoid, TableSpaceRelationId);
-	DeleteSharedSecurityLabel(tablespaceoid, TableSpaceRelationId);
-
-	/*
-	 * Remove dependency on owner.
-	 */
-	deleteSharedDependencyRecordsFor(TableSpaceRelationId, tablespaceoid, 0);
-
-	/*
-	 * Acquire TablespaceCreateLock to ensure that no TablespaceCreateDbspace
-	 * is running concurrently.
-	 */
-	LWLockAcquire(TablespaceCreateLock, LW_EXCLUSIVE);
-
-	/*
-	 * Try to remove the physical infrastructure.
-	 */
-	if (!destroy_tablespace_directories(tablespaceoid, false))
-	{
-		/*
-		 * Not all files deleted?  However, there can be lingering empty files
-		 * in the directories, left behind by for example DROP TABLE, that
-		 * have been scheduled for deletion at next checkpoint (see comments
-		 * in mdunlink() for details).  We could just delete them immediately,
-		 * but we can't tell them apart from important data files that we
-		 * mustn't delete.  So instead, we force a checkpoint which will clean
-		 * out any lingering files, and try again.
-		 *
-		 * XXX On Windows, an unlinked file persists in the directory listing
-		 * until no process retains an open handle for the file.  The DDL
-		 * commands that schedule files for unlink send invalidation messages
-		 * directing other PostgreSQL processes to close the files.  DROP
-		 * TABLESPACE should not give up on the tablespace becoming empty
-		 * until all relevant invalidation processing is complete.
-		 */
-		RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_FORCE | CHECKPOINT_WAIT);
-		if (!destroy_tablespace_directories(tablespaceoid, false))
-		{
-			/* Still not empty, the files must be important then */
-			ereport(ERROR,
-					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-					 errmsg("tablespace \"%s\" is not empty",
-							tablespacename)));
-		}
-	}
-
-	/* Record the filesystem change in XLOG */
-	{
-		xl_tblspc_drop_rec xlrec;
-
-		xlrec.ts_id = tablespaceoid;
-
-		XLogBeginInsert();
-		XLogRegisterData((char *) &xlrec, sizeof(xl_tblspc_drop_rec));
-
-		(void) XLogInsert(RM_TBLSPC_ID, XLOG_TBLSPC_DROP);
-	}
-
-	/*
-	 * Note: because we checked that the tablespace was empty, there should be
-	 * no need to worry about flushing shared buffers or free space map
-	 * entries for relations in the tablespace.
-	 */
-
-	/*
-	 * Force synchronous commit, to minimize the window between removing the
-	 * files on-disk and marking the transaction committed.  It's not great
-	 * that there is any window at all, but definitely we don't want to make
-	 * it larger than necessary.
-	 */
-	ForceSyncCommit();
-
-	/*
-	 * Allow TablespaceCreateDbspace again.
-	 */
-	LWLockRelease(TablespaceCreateLock);
-
 	/* We keep the lock on pg_tablespace until commit */
 	heap_close(rel, NoLock);
 }
 
 /*
- * get_tablespace_oid - given a tablespace name, look up the OID
+ * get_tablegroup_oid - given a tablegroup name, look up the OID
  *
- * If missing_ok is false, throw an error if tablespace name not found.  If
+ * If missing_ok is false, throw an error if tablegroup name not found.  If
  * true, just return InvalidOid.
  */
 Oid
-get_tablegroup_oid(const char *tablespacename, bool missing_ok)
+get_tablegroup_oid(const char *tablegroupname)
 {
 	Oid			result;
 	Relation	rel;
@@ -337,12 +201,12 @@ get_tablegroup_oid(const char *tablespacename, bool missing_ok)
 	 * index on name, on the theory that pg_tablespace will usually have just
 	 * a few entries and so an indexed lookup is a waste of effort.
 	 */
-	rel = heap_open(TableSpaceRelationId, AccessShareLock);
+	rel = heap_open(TableGroupRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
-				Anum_pg_tablespace_spcname,
+				Anum_pg_tablegroup_grpname,
 				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(tablespacename));
+				CStringGetDatum(tablegroup));
 	scandesc = heap_beginscan_catalog(rel, 1, entry);
 	tuple = heap_getnext(scandesc, ForwardScanDirection);
 
@@ -355,11 +219,11 @@ get_tablegroup_oid(const char *tablespacename, bool missing_ok)
 	heap_endscan(scandesc);
 	heap_close(rel, AccessShareLock);
 
-	if (!OidIsValid(result) && !missing_ok)
+	if (!OidIsValid(result))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("tablespace \"%s\" does not exist",
-						tablespacename)));
+						tablegroupname)));
 
 	return result;
 }
@@ -383,18 +247,18 @@ get_tablespace_name(Oid spc_oid)
 	 * index on oid, on the theory that pg_tablegroup will usually have just a
 	 * few entries and so an indexed lookup is a waste of effort.
 	 */
-	rel = heap_open(TableSpaceRelationId, AccessShareLock);
+	rel = heap_open(TableGroupRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
 				ObjectIdAttributeNumber,
 				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(spc_oid));
+				ObjectIdGetDatum(grp_oid));
 	scandesc = heap_beginscan_catalog(rel, 1, entry);
 	tuple = heap_getnext(scandesc, ForwardScanDirection);
 
 	/* We assume that there can be at most one matching tuple */
 	if (HeapTupleIsValid(tuple))
-		result = pstrdup(NameStr(((Form_pg_tablespace) GETSTRUCT(tuple))->spcname));
+		result = pstrdup(NameStr(((Form_pg_tablegroup) GETSTRUCT(tuple))->grpname));
 	else
 		result = NULL;
 
