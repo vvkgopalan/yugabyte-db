@@ -50,7 +50,8 @@ extern Relation heap_create(const char *relname,
 			char relpersistence,
 			bool shared_relation,
 			bool mapped_relation,
-			bool allow_system_table_mods);
+			bool allow_system_table_mods,
+			Oid reltablegroup);
 
 extern Oid heap_create_with_catalog(const char *relname,
 						 Oid relnamespace,
@@ -73,7 +74,8 @@ extern Oid heap_create_with_catalog(const char *relname,
 						 bool allow_system_table_mods,
 						 bool is_internal,
 						 Oid relrewrite,
-						 ObjectAddress *typaddress);
+						 ObjectAddress *typaddress,
+						 Oid reltablegroup);
 
 extern void heap_create_init_fork(Relation rel);
 

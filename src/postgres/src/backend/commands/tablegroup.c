@@ -93,7 +93,7 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 	/*
 	 * Check that there is no other tablegroup by this name.
 	 */
-	if (OidIsValid(get_tablegroup_oid(stmt->tablegroupname)))
+	if (OidIsValid(get_tablegroup_oid(stmt->tablegroupname, true)))
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("tablegroup \"%s\" already exists",
@@ -188,7 +188,7 @@ DropTableGroup(DropTableGroupStmt *stmt)
  * true, just return InvalidOid.
  */
 Oid
-get_tablegroup_oid(const char *tablegroupname)
+get_tablegroup_oid(const char *tablegroupname, bool missing_ok)
 {
 	Oid			result;
 	Relation	rel;
@@ -218,6 +218,12 @@ get_tablegroup_oid(const char *tablegroupname)
 
 	heap_endscan(scandesc);
 	heap_close(rel, AccessShareLock);
+
+	if (!OidIsValid(result) && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("tablegroup \"%s\" does not exist",
+						tablegroupname)));
 
 	return result;
 }
