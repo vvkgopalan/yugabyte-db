@@ -131,7 +131,6 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 /*
  * Drop a tablegroup
  *
- * What about empty vs non-empty tablegroup?
  * Permissions? Must be owner?
  */
 void
@@ -139,9 +138,13 @@ DropTableGroup(DropTableGroupStmt *stmt)
 {
 	char	   *tablegroupname = stmt->tablegroupname;
 	HeapScanDesc scandesc;
+	HeapScanDesc class_scandesc;
 	Relation	rel;
+	Relation 	class_rel;
 	HeapTuple	tuple;
+	HeapTuple 	class_tuple;
 	ScanKeyData entry[1];
+	ScanKeyData class_entry[1];
 	Oid			tablegroupoid;
 
 	/*
@@ -166,6 +169,27 @@ DropTableGroup(DropTableGroupStmt *stmt)
 	}
 
 	tablegroupoid = HeapTupleGetOid(tuple);
+
+	// TODO: investigate how to do this more efficiently using the
+	// pg_class_tblgrp_index since pg_class can grow quite large
+	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
+	ScanKeyInit(&class_entry[0],
+				Anum_pg_class_reltablegroup,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(tablegroupoid));
+	class_scandesc = heap_beginscan_catalog(class_rel, 1, class_entry);
+	class_tuple = heap_getnext(class_scandesc, ForwardScanDirection);
+
+	heap_endscan(class_scandesc);
+	heap_close(class_rel, NoLock);
+	if (HeapTupleIsValid(class_tuple))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("tablegroup \"%s\" is not empty",
+						tablegroupname)));
+		return;
+	}
 
 	/* DROP hook for the tablegroup being removed */
 	InvokeObjectDropHook(TableGroupRelationId, tablegroupoid, 0);

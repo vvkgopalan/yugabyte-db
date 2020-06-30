@@ -3959,7 +3959,7 @@ RelationBuildLocalRelation(const char *relname,
 		TupleDescAttr(rel->rd_att, i)->attrelid = relid;
 
 	rel->rd_rel->reltablespace = reltablespace;
-	//rel->rd_rel->reltablegroup = reltablegroup;
+	rel->rd_rel->reltablegroup = reltablegroup;
 
 	if (mapped_relation)
 	{
