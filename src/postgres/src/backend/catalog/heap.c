@@ -811,7 +811,6 @@ InsertPgClassTuple(Relation pg_class_desc,
 	values[Anum_pg_class_relam - 1] = ObjectIdGetDatum(rd_rel->relam);
 	values[Anum_pg_class_relfilenode - 1] = ObjectIdGetDatum(rd_rel->relfilenode);
 	values[Anum_pg_class_reltablespace - 1] = ObjectIdGetDatum(rd_rel->reltablespace);
-	//values[Anum_pg_class_reltablegroup - 1] = ObjectIdGetDatum(rd_rel->reltablegroup);
 	values[Anum_pg_class_relpages - 1] = Int32GetDatum(rd_rel->relpages);
 	values[Anum_pg_class_reltuples - 1] = Float4GetDatum(rd_rel->reltuples);
 	values[Anum_pg_class_relallvisible - 1] = Int32GetDatum(rd_rel->relallvisible);
@@ -834,6 +833,7 @@ InsertPgClassTuple(Relation pg_class_desc,
 	values[Anum_pg_class_relrewrite - 1] = ObjectIdGetDatum(rd_rel->relrewrite);
 	values[Anum_pg_class_relfrozenxid - 1] = TransactionIdGetDatum(rd_rel->relfrozenxid);
 	values[Anum_pg_class_relminmxid - 1] = MultiXactIdGetDatum(rd_rel->relminmxid);
+	values[Anum_pg_class_reltablegroup - 1] = ObjectIdGetDatum(rd_rel->reltablegroup);
 	if (relacl != (Datum) 0)
 		values[Anum_pg_class_relacl - 1] = relacl;
 	else
