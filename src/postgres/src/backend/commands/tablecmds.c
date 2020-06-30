@@ -71,6 +71,7 @@
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "commands/tablegroup.h"
 #include "commands/trigger.h"
 #include "commands/typecmds.h"
 #include "commands/user.h"
@@ -549,6 +550,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	Oid			namespaceId;
 	Oid			relationId = InvalidOid;
 	Oid			tablespaceId;
+	Oid 		tablegroupId;
 	Relation	rel;
 	TupleDesc	descriptor;
 	List	   *inheritOids;
@@ -619,6 +621,15 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	{
 		tablespaceId = GetDefaultTablespace(stmt->relation->relpersistence);
 		/* note InvalidOid is OK in this case */
+	}
+
+	if (stmt->tablegroupname)
+	{
+		tablegroupId = get_tablegroup_oid(stmt->tablegroupname, false);
+	}
+	else
+	{
+		tablegroupId = InvalidOid;
 	}
 
 	/* Check permissions except when using database's default */
@@ -794,7 +805,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 										  allowSystemTableMods,
 										  false,
 										  InvalidOid,
-										  typaddress);
+										  typaddress,
+										  tablegroupId);
 
 	/* Store inheritance information for new rel. */
 	StoreCatalogInheritance(relationId, inheritOids, stmt->partbound != NULL);

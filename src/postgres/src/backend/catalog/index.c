@@ -967,7 +967,8 @@ index_create(Relation heapRelation,
 								relpersistence,
 								shared_relation,
 								mapped_relation,
-								allow_system_table_mods);
+								allow_system_table_mods,
+								InvalidOid);
 
 	Assert(indexRelationId == RelationGetRelid(indexRelation));
 
