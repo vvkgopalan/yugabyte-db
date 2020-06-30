@@ -138,7 +138,7 @@ DropTableGroup(DropTableGroupStmt *stmt)
 {
 	char	   *tablegroupname = stmt->tablegroupname;
 	HeapScanDesc scandesc;
-	HeapScanDesc class_scandesc;
+	SysScanDesc class_scandesc;
 	Relation	rel;
 	Relation 	class_rel;
 	HeapTuple	tuple;
@@ -170,17 +170,20 @@ DropTableGroup(DropTableGroupStmt *stmt)
 
 	tablegroupoid = HeapTupleGetOid(tuple);
 
-	// TODO: investigate how to do this more efficiently using the
-	// pg_class_tblgrp_index since pg_class can grow quite large
+	// Scan uses pg_class_tblgrp_index since pg_class can grow large
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
 	ScanKeyInit(&class_entry[0],
 				Anum_pg_class_reltablegroup,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(tablegroupoid));
-	class_scandesc = heap_beginscan_catalog(class_rel, 1, class_entry);
-	class_tuple = heap_getnext(class_scandesc, ForwardScanDirection);
-
-	heap_endscan(class_scandesc);
+	class_scandesc = systable_beginscan(class_rel,
+									    ClassTblgrpIndexId,
+									    true,
+									    NULL,
+									    1,
+									    class_entry);
+	class_tuple = systable_getnext(class_scandesc);
+	systable_endscan(class_scandesc);
 	heap_close(class_rel, NoLock);
 	if (HeapTupleIsValid(class_tuple))
 	{
@@ -188,6 +191,8 @@ DropTableGroup(DropTableGroupStmt *stmt)
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("tablegroup \"%s\" is not empty",
 						tablegroupname)));
+		heap_endscan(scandesc);
+		heap_close(rel, NoLock);
 		return;
 	}
 
@@ -195,7 +200,7 @@ DropTableGroup(DropTableGroupStmt *stmt)
 	InvokeObjectDropHook(TableGroupRelationId, tablegroupoid, 0);
 
 	/*
-	 * Remove the pg_tablegroup tuple (this will roll back if we fail below)
+	 * Remove the pg_tablegroup tuple
 	 */
 	CatalogTupleDelete(rel, tuple);
 
