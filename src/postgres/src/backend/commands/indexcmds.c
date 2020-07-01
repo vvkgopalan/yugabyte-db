@@ -37,6 +37,7 @@
 #include "commands/event_trigger.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "commands/tablegroup.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -343,6 +344,7 @@ DefineIndex(Oid relationId,
 	Oid			accessMethodId;
 	Oid			namespaceId;
 	Oid			tablespaceId;
+	Oid 		tableGroupId;
 	Oid			createdConstraintId = InvalidOid;
 	List	   *indexColNames;
 	List	   *allIndexParams;
@@ -561,6 +563,16 @@ DefineIndex(Oid relationId,
 	{
 		tablespaceId = GetDefaultTablespace(rel->rd_rel->relpersistence);
 		/* note InvalidOid is OK in this case */
+	}
+
+	/* Select tablegroup to use.  If not specified, InvalidOid. */
+	if (stmt->tablegroupname)
+	{
+		tableGroupId = get_tablegroup_oid(stmt->tablegroupname, false);
+	}
+	else
+	{
+		tableGroupId = InvalidOid;
 	}
 
 	/* Check tablespace permissions */
@@ -940,7 +952,7 @@ DefineIndex(Oid relationId,
 					 flags, constr_flags,
 					 allowSystemTableMods, !check_rights,
 					 &createdConstraintId, stmt->split_options,
-					 !stmt->concurrent);
+					 !stmt->concurrent, tableGroupId);
 
 	ObjectAddressSet(address, RelationRelationId, indexRelationId);
 
