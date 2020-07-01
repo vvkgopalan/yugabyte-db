@@ -10,6 +10,7 @@
 // or implied.  See the License for the specific language governing permissions and limitations
 // under the License.
 
+#include <algorithm>
 #include <string>
 
 #include <cds/init.h> // NOLINT
@@ -200,12 +201,24 @@ YBCStatus YBCPgGetCatalogMasterVersion(uint64_t *version) {
   return ToYBCStatus(pgapi->GetCatalogMasterVersion(version));
 }
 
-// Statement Operations ----------------------------------------------------------------------------
-
-YBCStatus YBCPgDeleteStatement(YBCPgStatement handle) {
-  return ToYBCStatus(Status::OK());
-  // return ToYBCStatus(pgapi->DeleteStatement(handle));
+void YBCPgInvalidateTableCache(
+    const YBCPgOid database_oid,
+    const YBCPgOid table_oid) {
+  const PgObjectId table_id(database_oid, table_oid);
+  pgapi->InvalidateTableCache(table_id);
 }
+
+YBCStatus YBCPgInvalidateTableCacheByTableId(const char *table_id) {
+  if (table_id == NULL) {
+    return ToYBCStatus(STATUS(InvalidArgument, "table_id is null"));
+  }
+  std::string table_id_str = table_id;
+  const PgObjectId pg_object_id(table_id_str);
+  pgapi->InvalidateTableCache(pg_object_id);
+  return YBCStatusOK();
+}
+
+// Statement Operations ----------------------------------------------------------------------------
 
 YBCStatus YBCPgClearBinds(YBCPgStatement handle) {
   return ToYBCStatus(pgapi->ClearBinds(handle));
@@ -390,6 +403,14 @@ YBCStatus YBCPgIsTableColocated(const YBCPgOid database_oid,
   }
 }
 
+YBCStatus YBCPgGetTableProperties(YBCPgTableDesc table_desc,
+                                  YBCPgTableProperties *properties) {
+  CHECK_NOTNULL(properties)->num_tablets = table_desc->GetPartitionCount();
+  properties->num_hash_key_columns = table_desc->num_hash_key_columns();
+  properties->is_colocated = table_desc->IsColocated();
+  return YBCStatusOK();
+}
+
 // Index Operations -------------------------------------------------------------------------------
 
 YBCStatus YBCPgNewCreateIndex(const char *database_name,
@@ -548,6 +569,16 @@ YBCStatus YBCPgExecInsert(YBCPgStatement handle) {
 
 YBCStatus YBCPgInsertStmtSetUpsertMode(YBCPgStatement handle) {
   return ToYBCStatus(pgapi->InsertStmtSetUpsertMode(handle));
+}
+
+YBCStatus YBCPgInsertStmtSetWriteTime(YBCPgStatement handle, const uint64_t write_time) {
+  HybridTime write_hybrid_time;
+  YBCStatus status = ToYBCStatus(write_hybrid_time.FromUint64(write_time));
+  if (status) {
+    return status;
+  } else {
+    return ToYBCStatus(pgapi->InsertStmtSetWriteTime(handle, write_hybrid_time));
+  }
 }
 
 // UPDATE Operations -------------------------------------------------------------------------------

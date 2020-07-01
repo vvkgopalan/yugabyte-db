@@ -276,6 +276,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	PartitionBoundSpec	*partboundspec;
 	RoleSpec			*rolespec;
 	OptSplit			*splitopt;
+	RowBounds			*rowbounds;
 }
 
 %type <node>	stmt schema_stmt
@@ -317,6 +318,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		CreateMatViewStmt RefreshMatViewStmt CreateAmStmt
 		CreatePublicationStmt AlterPublicationStmt
 		CreateSubscriptionStmt AlterSubscriptionStmt DropSubscriptionStmt
+		BackfillIndexStmt
 
 %type <node>	select_no_parens select_with_parens select_clause
 				simple_select values_clause
@@ -557,6 +559,8 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <boolean> opt_varying opt_timezone opt_no_inherit
 
 %type <ival>	Iconst SignedIconst
+%type <ival>	Oid
+%type <list>	oid_list
 %type <str>		Sconst comment_text notify_payload
 %type <str>		RoleId opt_boolean_or_string
 %type <list>	var_list
@@ -625,6 +629,11 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <list>		hash_partbound partbound_datum_list range_datum_list
 %type <defelt>		hash_partbound_elem
 
+%type <rowbounds>	RowBounds
+%type <str>		partition_key
+%type <str>		row_key row_key_end row_key_start
+%type <str>		read_time
+
 /*
  * Non-keyword token types.  These are hard-wired into the "flex" lexer.
  * They must be listed first so that their numeric codes do not depend on
@@ -651,7 +660,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 	AGGREGATE ALL ALSO ALTER ALWAYS ANALYSE ANALYZE AND ANY ARRAY AS ASC
 	ASSERTION ASSIGNMENT ASYMMETRIC AT ATTACH ATTRIBUTE AUTHORIZATION
 
-	BACKWARD BEFORE BEGIN_P BETWEEN BIGINT BINARY BIT
+	BACKFILL BACKWARD BEFORE BEGIN_P BETWEEN BIGINT BINARY BIT
 	BOOLEAN_P BOTH BY
 
 	CACHE CALL CALLED CASCADE CASCADED CASE CAST CATALOG_P CHAIN CHAR_P
@@ -878,10 +887,15 @@ stmt :
 				{ $$ = NULL; }
 			| AlterDatabaseSetStmt
 			| AlterDatabaseStmt
+			| AlterDefaultPrivilegesStmt
 			| AlterDomainStmt
 			| AlterObjectSchemaStmt
 			| AlterOperatorStmt
 			| AlterOpFamilyStmt
+			| AlterOwnerStmt
+			| AlterPolicyStmt
+			| AlterRoleSetStmt
+			| AlterRoleStmt
 			| AlterSeqStmt
 			| AlterTableStmt
 			| CallStmt
@@ -890,28 +904,43 @@ stmt :
 			| CopyStmt
 			| CreateCastStmt
 			| CreateDomainStmt
+			| CreateExtensionStmt
+			| CreateFunctionStmt
+			| CreateGroupStmt
+			| CreateOpClassStmt
 			| CreateOpFamilyStmt
+			| CreatePolicyStmt
+			| CreateRoleStmt
 			| CreateSchemaStmt
+			| CreateTrigStmt
 			| CreateUserStmt
 			| CreatedbStmt
 			| DeallocateStmt
 			| DefineStmt
 			| DeleteStmt
 			| DiscardStmt
+			| DoStmt
 			| DropCastStmt
+			| DropOpClassStmt
 			| DropOpFamilyStmt
+			| DropOwnedStmt
+			| DropRoleStmt
 			| DropStmt
 			| DropdbStmt
 			| ExecuteStmt
 			| ExplainStmt
+			| GrantRoleStmt
 			| GrantStmt
 			| IndexStmt
 			| InsertStmt
 			| LockStmt
 			| PrepareStmt
+			| ReassignOwnedStmt
 			| RemoveAggrStmt
+			| RemoveFuncStmt
 			| RemoveOperStmt
 			| RenameStmt
+			| RevokeRoleStmt
 			| RevokeStmt
 			| RuleStmt
 			| SelectStmt
@@ -926,28 +955,8 @@ stmt :
 			/* BETA features */
 			| AlterExtensionContentsStmt { parser_ybc_beta_feature(@1, "extension"); }
 			| AlterExtensionStmt { parser_ybc_beta_feature(@1, "extension"); }
-			| AnalyzeStmt { parser_ybc_beta_feature(@1, "analyze"); }
-			| CreateFunctionStmt { parser_ybc_beta_feature(@1, "function"); }
-			| CreateOpClassStmt { parser_ybc_beta_feature(@1, "opclass"); }
-			| CreatePolicyStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| DoStmt { parser_ybc_beta_feature(@1, "function"); }
-			| DropOpClassStmt { parser_ybc_beta_feature(@1, "opclass"); }
-			| RemoveFuncStmt { parser_ybc_beta_feature(@1, "function"); }
-			| CreateTrigStmt { parser_ybc_beta_feature(@1, "trigger"); }
-			| CreateExtensionStmt { parser_ybc_beta_feature(@1, "extension"); }
-			| AlterDefaultPrivilegesStmt { parser_ybc_beta_feature(@1, "roles"); }
 			| AlterGroupStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| AlterOwnerStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| AlterPolicyStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| AlterRoleSetStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| AlterRoleStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| CreateGroupStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| CreateRoleStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| DropOwnedStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| DropRoleStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| GrantRoleStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| ReassignOwnedStmt { parser_ybc_beta_feature(@1, "roles"); }
-			| RevokeRoleStmt { parser_ybc_beta_feature(@1, "roles"); }
+			| AnalyzeStmt { parser_ybc_beta_feature(@1, "analyze"); }
 			| VacuumStmt { parser_ybc_beta_feature(@1, "vacuum"); }
 			| CreateTableGroupStmt { parser_ybc_beta_feature(@1, "tablegroup"); }
 			| DropTableGroupStmt { parser_ybc_beta_feature(@1, "tablegroup"); }
@@ -1033,7 +1042,6 @@ CallStmt:	CALL func_application
 CreateRoleStmt:
 			CREATE ROLE RoleId opt_with OptRoleList
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					CreateRoleStmt *n = makeNode(CreateRoleStmt);
 					n->stmt_type = ROLESTMT_ROLE;
 					n->role = $3;
@@ -1056,7 +1064,6 @@ opt_with:	WITH									{}
 OptRoleList:
 			OptRoleList CreateOptRoleElem
 				{
-					parser_ybc_beta_feature(@2, "roles");
 					$$ = lappend($1, $2);
 				}
 			| /* EMPTY */							{ $$ = NIL; }
@@ -1212,7 +1219,6 @@ CreateUserStmt:
 AlterRoleStmt:
 			ALTER ROLE RoleSpec opt_with AlterOptRoleList
 				 {
-					parser_ybc_beta_feature(@1, "roles");
 					AlterRoleStmt *n = makeNode(AlterRoleStmt);
 					n->role = $3;
 					n->action = +1;	/* add, if there are members */
@@ -1221,7 +1227,6 @@ AlterRoleStmt:
 				 }
 			| ALTER USER RoleSpec opt_with AlterOptRoleList
 				 {
-					parser_ybc_beta_feature(@1, "roles");
 					AlterRoleStmt *n = makeNode(AlterRoleStmt);
 					n->role = $3;
 					n->action = +1;	/* add, if there are members */
@@ -1238,7 +1243,6 @@ opt_in_database:
 AlterRoleSetStmt:
 			ALTER ROLE RoleSpec opt_in_database SetResetClause
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterRoleSetStmt *n = makeNode(AlterRoleSetStmt);
 					n->role = $3;
 					n->database = $4;
@@ -1247,7 +1251,6 @@ AlterRoleSetStmt:
 				}
 			| ALTER ROLE ALL opt_in_database SetResetClause
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterRoleSetStmt *n = makeNode(AlterRoleSetStmt);
 					n->role = NULL;
 					n->database = $4;
@@ -1256,7 +1259,6 @@ AlterRoleSetStmt:
 				}
 			| ALTER USER RoleSpec opt_in_database SetResetClause
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterRoleSetStmt *n = makeNode(AlterRoleSetStmt);
 					n->role = $3;
 					n->database = $4;
@@ -1265,7 +1267,6 @@ AlterRoleSetStmt:
 				}
 			| ALTER USER ALL opt_in_database SetResetClause
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterRoleSetStmt *n = makeNode(AlterRoleSetStmt);
 					n->role = NULL;
 					n->database = $4;
@@ -1287,7 +1288,6 @@ AlterRoleSetStmt:
 DropRoleStmt:
 			DROP ROLE role_list
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					DropRoleStmt *n = makeNode(DropRoleStmt);
 					n->missing_ok = false;
 					n->roles = $3;
@@ -1295,7 +1295,6 @@ DropRoleStmt:
 				}
 			| DROP ROLE IF_P EXISTS role_list
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					DropRoleStmt *n = makeNode(DropRoleStmt);
 					n->missing_ok = true;
 					n->roles = $5;
@@ -1303,7 +1302,6 @@ DropRoleStmt:
 				}
 			| DROP USER role_list
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					DropRoleStmt *n = makeNode(DropRoleStmt);
 					n->missing_ok = false;
 					n->roles = $3;
@@ -1311,7 +1309,6 @@ DropRoleStmt:
 				}
 			| DROP USER IF_P EXISTS role_list
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					DropRoleStmt *n = makeNode(DropRoleStmt);
 					n->roles = $5;
 					n->missing_ok = true;
@@ -1319,7 +1316,6 @@ DropRoleStmt:
 				}
 			| DROP GROUP_P role_list
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					DropRoleStmt *n = makeNode(DropRoleStmt);
 					n->missing_ok = false;
 					n->roles = $3;
@@ -1327,7 +1323,6 @@ DropRoleStmt:
 				}
 			| DROP GROUP_P IF_P EXISTS role_list
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					DropRoleStmt *n = makeNode(DropRoleStmt);
 					n->missing_ok = true;
 					n->roles = $5;
@@ -1345,7 +1340,6 @@ DropRoleStmt:
 CreateGroupStmt:
 			CREATE GROUP_P RoleId opt_with OptRoleList
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					CreateRoleStmt *n = makeNode(CreateRoleStmt);
 					n->stmt_type = ROLESTMT_GROUP;
 					n->role = $3;
@@ -1388,7 +1382,6 @@ add_drop:	ADD_P									{ $$ = +1; }
 CreateSchemaStmt:
 			CREATE SCHEMA OptSchemaName AUTHORIZATION RoleSpec OptSchemaEltList
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					CreateSchemaStmt *n = makeNode(CreateSchemaStmt);
 					/* One can omit the schema name or the authorization id. */
 					n->schemaname = $3;
@@ -1409,7 +1402,6 @@ CreateSchemaStmt:
 				}
 			| CREATE SCHEMA IF_P NOT EXISTS OptSchemaName AUTHORIZATION RoleSpec OptSchemaEltList
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					CreateSchemaStmt *n = makeNode(CreateSchemaStmt);
 					/* schema name can be omitted here, too */
 					n->schemaname = $6;
@@ -1753,7 +1745,6 @@ reset_rest:
 				}
 			| SESSION AUTHORIZATION
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					VariableSetStmt *n = makeNode(VariableSetStmt);
 					n->kind = VAR_RESET;
 					n->name = "session_authorization";
@@ -2664,7 +2655,6 @@ alter_table_cmd:
 			/* ALTER TABLE <name> ENABLE ROW LEVEL SECURITY */
 			| ENABLE_P ROW LEVEL SECURITY
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterTableCmd *n = makeNode(AlterTableCmd);
 					n->subtype = AT_EnableRowSecurity;
 					$$ = (Node *)n;
@@ -2672,7 +2662,6 @@ alter_table_cmd:
 			/* ALTER TABLE <name> DISABLE ROW LEVEL SECURITY */
 			| DISABLE_P ROW LEVEL SECURITY
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterTableCmd *n = makeNode(AlterTableCmd);
 					n->subtype = AT_DisableRowSecurity;
 					$$ = (Node *)n;
@@ -2680,7 +2669,6 @@ alter_table_cmd:
 			/* ALTER TABLE <name> FORCE ROW LEVEL SECURITY */
 			| FORCE ROW LEVEL SECURITY
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterTableCmd *n = makeNode(AlterTableCmd);
 					n->subtype = AT_ForceRowSecurity;
 					$$ = (Node *)n;
@@ -2688,7 +2676,6 @@ alter_table_cmd:
 			/* ALTER TABLE <name> NO FORCE ROW LEVEL SECURITY */
 			| NO FORCE ROW LEVEL SECURITY
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterTableCmd *n = makeNode(AlterTableCmd);
 					n->subtype = AT_NoForceRowSecurity;
 					$$ = (Node *)n;
@@ -5701,7 +5688,6 @@ CreatePolicyStmt:
 				RowSecurityDefaultForCmd RowSecurityDefaultToRole
 				RowSecurityOptionalExpr RowSecurityOptionalWithCheck
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					CreatePolicyStmt *n = makeNode(CreatePolicyStmt);
 					n->policy_name = $3;
 					n->table = $5;
@@ -5718,7 +5704,6 @@ AlterPolicyStmt:
 			ALTER POLICY name ON qualified_name RowSecurityOptionalToRole
 				RowSecurityOptionalExpr RowSecurityOptionalWithCheck
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterPolicyStmt *n = makeNode(AlterPolicyStmt);
 					n->policy_name = $3;
 					n->table = $5;
@@ -6669,7 +6654,6 @@ DropOpFamilyStmt:
 DropOwnedStmt:
 			DROP OWNED BY role_list opt_drop_behavior
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					DropOwnedStmt *n = makeNode(DropOwnedStmt);
 					n->roles = $4;
 					n->behavior = $5;
@@ -6680,7 +6664,6 @@ DropOwnedStmt:
 ReassignOwnedStmt:
 			REASSIGN OWNED BY role_list TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					ReassignOwnedStmt *n = makeNode(ReassignOwnedStmt);
 					n->roles = $4;
 					n->newrole = $6;
@@ -6884,7 +6867,6 @@ drop_type_name:
 				}
 			| EXTENSION
 				{
-					parser_ybc_beta_feature(@1, "extension");
 					$$ = OBJECT_EXTENSION;
 				}
 			| FOREIGN DATA_P WRAPPER
@@ -6899,9 +6881,9 @@ drop_type_name:
 
 /* object types attached to a table */
 drop_type_name_on_any_name:
-			POLICY { parser_ybc_beta_feature(@1, "roles"); $$ = OBJECT_POLICY; }
+			POLICY { $$ = OBJECT_POLICY; }
 			| RULE { $$ = OBJECT_RULE; }
-			| TRIGGER { parser_ybc_beta_feature(@1, "trigger"); $$ = OBJECT_TRIGGER; }
+			| TRIGGER { $$ = OBJECT_TRIGGER; }
 		;
 
 any_name_list:
@@ -7790,7 +7772,6 @@ opt_grant_grant_option:
 GrantRoleStmt:
 			GRANT privilege_list TO role_list opt_grant_admin_option opt_granted_by
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					GrantRoleStmt *n = makeNode(GrantRoleStmt);
 					n->is_grant = true;
 					n->granted_roles = $2;
@@ -7804,7 +7785,6 @@ GrantRoleStmt:
 RevokeRoleStmt:
 			REVOKE privilege_list FROM role_list opt_granted_by opt_drop_behavior
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					GrantRoleStmt *n = makeNode(GrantRoleStmt);
 					n->is_grant = false;
 					n->admin_opt = false;
@@ -7815,7 +7795,6 @@ RevokeRoleStmt:
 				}
 			| REVOKE ADMIN OPTION FOR privilege_list FROM role_list opt_granted_by opt_drop_behavior
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					GrantRoleStmt *n = makeNode(GrantRoleStmt);
 					n->is_grant = false;
 					n->admin_opt = true;
@@ -7843,7 +7822,6 @@ opt_granted_by: GRANTED BY RoleSpec						{ $$ = $3; }
 AlterDefaultPrivilegesStmt:
 			ALTER DEFAULT PRIVILEGES DefACLOptionList DefACLAction
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterDefaultPrivilegesStmt *n = makeNode(AlterDefaultPrivilegesStmt);
 					n->options = $4;
 					n->action = (GrantStmt *) $5;
@@ -8188,6 +8166,87 @@ opt_nulls_order: NULLS_LA FIRST_P			{ $$ = SORTBY_NULLS_FIRST; }
 			| NULLS_LA LAST_P				{ $$ = SORTBY_NULLS_LAST; }
 			| /*EMPTY*/						{ $$ = SORTBY_NULLS_DEFAULT; }
 		;
+
+BackfillIndexStmt:
+			BACKFILL INDEX oid_list
+				READ TIME read_time
+				RowBounds
+				{
+					BackfillIndexStmt *n = makeNode(BackfillIndexStmt);
+					n->oid_list = $3;
+					{
+						char *nptr = $6;
+						char *end;
+						errno = 0;
+						n->read_time = strtoul(nptr, &end, 10);
+						if (!(*nptr != '\0' && *end == '\0')
+								|| errno == ERANGE)
+							ereport(ERROR,
+									(errcode(ERRCODE_SYNTAX_ERROR),
+									 errmsg("read time must be uint64"),
+									 parser_errposition(@6)));
+					}
+					n->row_bounds = $7;
+					$$ = (Node *)n;
+				}
+		;
+
+oid_list:	Oid
+				{
+					$$ = list_make1_oid($1);
+				}
+			| oid_list ',' Oid
+				{
+					$$ = lappend_oid($1, $3);
+				}
+		;
+
+read_time:	I_or_F_const
+				{
+					A_Const *con = (A_Const *)$1;
+					if (con->val.type == T_Integer)
+						$$ = psprintf("%d", con->val.val.ival);
+					else
+						$$ = con->val.val.str;
+				}
+		;
+
+RowBounds:	PARTITION partition_key
+				{
+					$$ = makeNode(RowBounds);
+					/* Strip the leading 'x' */
+					$$->partition_key = $2 + 1;
+					$$->row_key_start = NULL;
+					$$->row_key_end = NULL;
+				}
+			| PARTITION partition_key FROM row_key_start
+				{
+					$$ = makeNode(RowBounds);
+					/* Strip the leading 'x' */
+					$$->partition_key = $2 + 1;
+					$$->row_key_start = $4 + 1;
+					$$->row_key_end = NULL;
+				}
+			| PARTITION partition_key FROM row_key_start TO row_key_end
+				{
+					$$ = makeNode(RowBounds);
+					/* Strip the leading 'x' */
+					$$->partition_key = $2 + 1;
+					$$->row_key_start = $4 + 1;
+					$$->row_key_end = $6 + 1;
+				}
+		;
+
+partition_key:
+			XCONST									{ $$ = $1; };
+
+row_key_start:
+			row_key									{ $$ = $1; };
+
+row_key_end:
+			row_key									{ $$ = $1; };
+
+row_key:	XCONST									{ $$ = $1; };
 
 
 /*****************************************************************************
@@ -9208,7 +9267,6 @@ RenameStmt: ALTER AGGREGATE aggregate_with_argtypes RENAME TO name
 				}
 			| ALTER GROUP_P RoleId RENAME TO RoleId
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					RenameStmt *n = makeNode(RenameStmt);
 					n->renameType = OBJECT_ROLE;
 					n->subname = $3;
@@ -9247,7 +9305,6 @@ RenameStmt: ALTER AGGREGATE aggregate_with_argtypes RENAME TO name
 				}
 			| ALTER POLICY name ON qualified_name RENAME TO name
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					RenameStmt *n = makeNode(RenameStmt);
 					n->renameType = OBJECT_POLICY;
 					n->relation = $5;
@@ -9258,7 +9315,6 @@ RenameStmt: ALTER AGGREGATE aggregate_with_argtypes RENAME TO name
 				}
 			| ALTER POLICY IF_P EXISTS name ON qualified_name RENAME TO name
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					RenameStmt *n = makeNode(RenameStmt);
 					n->renameType = OBJECT_POLICY;
 					n->relation = $7;
@@ -9563,7 +9619,6 @@ RenameStmt: ALTER AGGREGATE aggregate_with_argtypes RENAME TO name
 				}
 			| ALTER TRIGGER name ON qualified_name RENAME TO name
 				{
-					parser_ybc_beta_feature(@1, "trigger");
 					RenameStmt *n = makeNode(RenameStmt);
 					n->renameType = OBJECT_TRIGGER;
 					n->relation = $5;
@@ -9583,7 +9638,6 @@ RenameStmt: ALTER AGGREGATE aggregate_with_argtypes RENAME TO name
 				}
 			| ALTER ROLE RoleId RENAME TO RoleId
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					RenameStmt *n = makeNode(RenameStmt);
 					n->renameType = OBJECT_ROLE;
 					n->subname = $3;
@@ -9593,7 +9647,6 @@ RenameStmt: ALTER AGGREGATE aggregate_with_argtypes RENAME TO name
 				}
 			| ALTER USER RoleId RENAME TO RoleId
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					RenameStmt *n = makeNode(RenameStmt);
 					n->renameType = OBJECT_ROLE;
 					n->subname = $3;
@@ -10077,7 +10130,6 @@ operator_def_arg:
 
 AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_AGGREGATE;
 					n->object = (Node *) $3;
@@ -10086,7 +10138,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER COLLATION any_name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_COLLATION;
 					n->object = (Node *) $3;
@@ -10095,7 +10146,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER CONVERSION_P any_name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_CONVERSION;
 					n->object = (Node *) $3;
@@ -10104,7 +10154,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER DATABASE database_name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_DATABASE;
 					n->object = (Node *) makeString($3);
@@ -10113,7 +10162,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER DOMAIN_P any_name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_DOMAIN;
 					n->object = (Node *) $3;
@@ -10122,7 +10170,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER FUNCTION function_with_argtypes OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_FUNCTION;
 					n->object = (Node *) $3;
@@ -10131,7 +10178,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER opt_procedural LANGUAGE name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_LANGUAGE;
 					n->object = (Node *) makeString($4);
@@ -10140,7 +10186,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER LARGE_P OBJECT_P NumericOnly OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_LARGEOBJECT;
 					n->object = (Node *) $4;
@@ -10157,7 +10202,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER OPERATOR CLASS any_name USING access_method OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_OPCLASS;
 					n->object = (Node *) lcons(makeString($6), $4);
@@ -10166,7 +10210,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER OPERATOR FAMILY any_name USING access_method OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_OPFAMILY;
 					n->object = (Node *) lcons(makeString($6), $4);
@@ -10175,7 +10218,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER PROCEDURE function_with_argtypes OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_PROCEDURE;
 					n->object = (Node *) $3;
@@ -10184,7 +10226,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER ROUTINE function_with_argtypes OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_ROUTINE;
 					n->object = (Node *) $3;
@@ -10193,7 +10234,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER SCHEMA name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_SCHEMA;
 					n->object = (Node *) makeString($3);
@@ -10202,7 +10242,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER TYPE_P any_name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_TYPE;
 					n->object = (Node *) $3;
@@ -10211,7 +10250,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER TABLESPACE name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_TABLESPACE;
 					n->object = (Node *) makeString($3);
@@ -10220,7 +10258,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER STATISTICS any_name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_STATISTIC_EXT;
 					n->object = (Node *) $3;
@@ -10229,7 +10266,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER TEXT_P SEARCH DICTIONARY any_name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_TSDICTIONARY;
 					n->object = (Node *) $5;
@@ -10238,7 +10274,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER TEXT_P SEARCH CONFIGURATION any_name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_TSCONFIGURATION;
 					n->object = (Node *) $5;
@@ -10247,7 +10282,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER FOREIGN DATA_P WRAPPER name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_FDW;
 					n->object = (Node *) makeString($5);
@@ -10256,7 +10290,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER SERVER name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_FOREIGN_SERVER;
 					n->object = (Node *) makeString($3);
@@ -10265,7 +10298,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER EVENT TRIGGER name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_EVENT_TRIGGER;
 					n->object = (Node *) makeString($4);
@@ -10274,7 +10306,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER PUBLICATION name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_PUBLICATION;
 					n->object = (Node *) makeString($3);
@@ -10283,7 +10314,6 @@ AlterOwnerStmt: ALTER AGGREGATE aggregate_with_argtypes OWNER TO RoleSpec
 				}
 			| ALTER SUBSCRIPTION name OWNER TO RoleSpec
 				{
-					parser_ybc_beta_feature(@1, "roles");
 					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
 					n->objectType = OBJECT_SUBSCRIPTION;
 					n->object = (Node *) makeString($3);
@@ -10968,7 +10998,6 @@ createdb_opt_name:
 			| TEMPLATE						{ $$ = pstrdup($1); }
 			| COLOCATED
 				{
-					parser_ybc_beta_feature(@1, "colocated database");
 					$$ = pstrdup($1);
 				}
 		;
@@ -15748,6 +15777,8 @@ SignedIconst: Iconst								{ $$ = $1; }
 			| '-' Iconst							{ $$ = - $2; }
 		;
 
+Oid:		ICONST									{ $$ = $1; };
+
 /* Role specifications */
 RoleId:		RoleSpec
 				{
@@ -15901,6 +15932,7 @@ unreserved_keyword:
 			| AT
 			| ATTACH
 			| ATTRIBUTE
+			| BACKFILL
 			| BACKWARD
 			| BEFORE
 			| BEGIN_P

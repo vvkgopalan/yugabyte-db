@@ -842,6 +842,13 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			}
 			break;
 
+		case T_BackfillIndexStmt:
+			{
+				BackfillIndexStmt *stmt = (BackfillIndexStmt *) parsetree;
+				BackfillIndex(stmt);
+			}
+			break;
+
 			/*
 			 * The following statements are supported by Event Triggers only
 			 * in some cases, so we "fast path" them in the other cases.
@@ -2752,6 +2759,10 @@ CreateCommandTag(Node *parsetree)
 			tag = "REINDEX";
 			break;
 
+		case T_BackfillIndexStmt:
+			tag = "BACKFILL INDEX";
+			break;
+
 		case T_CreateConversionStmt:
 			tag = "CREATE CONVERSION";
 			break;
@@ -3349,6 +3360,10 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_ReindexStmt:
+			lev = LOGSTMT_ALL;	/* should this be DDL? */
+			break;
+
+		case T_BackfillIndexStmt:
 			lev = LOGSTMT_ALL;	/* should this be DDL? */
 			break;
 

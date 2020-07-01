@@ -202,6 +202,13 @@ class Tablet : public AbstractTablet, public TransactionIntentApplier {
 
   CHECKED_STATUS EnableCompactions(ScopedRWOperationPause* operation_pause);
 
+  Result<std::string> BackfillIndexesForYsql(
+      const std::vector<IndexInfo>& indexes,
+      const std::string& backfill_from,
+      const CoarseTimePoint deadline,
+      const HybridTime read_time,
+      const HostPort& pgsql_proxy_bind_address,
+      const std::string& database_name);
   Result<std::string> BackfillIndexes(const std::vector<IndexInfo>& indexes,
                                       const std::string& backfill_from,
                                       const CoarseTimePoint deadline,
@@ -465,8 +472,19 @@ class Tablet : public AbstractTablet, public TransactionIntentApplier {
   }
 
   yb::SchemaPtr GetSchema(const std::string& table_id = "") const override {
-    auto table_info = CHECK_RESULT (metadata_->GetTableInfo(table_id));
+    if (table_id.empty()) {
+      return metadata_->schema();
+    }
+    auto table_info = CHECK_RESULT(metadata_->GetTableInfo(table_id));
     return yb::SchemaPtr(table_info, &table_info->schema);
+  }
+
+  Schema GetKeySchema(const std::string& table_id = "") const {
+    if (table_id.empty()) {
+      return key_schema_;
+    }
+    auto table_info = CHECK_RESULT(metadata_->GetTableInfo(table_id));
+    return table_info->schema.CreateKeyProjection();
   }
 
   const common::YQLStorageIf& QLStorage() const override {
@@ -605,6 +623,8 @@ class Tablet : public AbstractTablet, public TransactionIntentApplier {
   friend class TabletPeerTest;
   friend class ScopedReadOperation;
   friend class TabletComponent;
+
+  class RegularRocksDbListener;
 
   FRIEND_TEST(TestTablet, TestGetLogRetentionSizeForIndex);
 

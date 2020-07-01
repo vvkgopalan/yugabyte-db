@@ -135,6 +135,11 @@ YBCStatus YBCPgReserveOids(YBCPgOid database_oid,
 
 YBCStatus YBCPgGetCatalogMasterVersion(uint64_t *version);
 
+void YBCPgInvalidateTableCache(
+    const YBCPgOid database_oid,
+    const YBCPgOid table_oid);
+YBCStatus YBCPgInvalidateTableCacheByTableId(const char *table_id);
+
 // TABLE -------------------------------------------------------------------------------------------
 // Create and drop table "database_name.schema_name.table_name()".
 // - When "schema_name" is NULL, the table "database_name.table_name" is created.
@@ -199,6 +204,9 @@ YBCStatus YBCPgGetColumnInfo(YBCPgTableDesc table_desc,
                              int16_t attr_number,
                              bool *is_primary,
                              bool *is_hash);
+
+YBCStatus YBCPgGetTableProperties(YBCPgTableDesc table_desc,
+                                  YBCPgTableProperties *properties);
 
 YBCStatus YBCPgDmlModifiesRow(YBCPgStatement handle, bool *modifies_row);
 
@@ -337,6 +345,8 @@ YBCStatus YBCPgNewInsert(YBCPgOid database_oid,
 YBCStatus YBCPgExecInsert(YBCPgStatement handle);
 
 YBCStatus YBCPgInsertStmtSetUpsertMode(YBCPgStatement handle);
+
+YBCStatus YBCPgInsertStmtSetWriteTime(YBCPgStatement handle, const uint64_t write_time);
 
 // UPDATE ------------------------------------------------------------------------------------------
 YBCStatus YBCPgNewUpdate(YBCPgOid database_oid,

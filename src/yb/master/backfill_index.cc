@@ -146,6 +146,16 @@ using namespace std::literals;
 using strings::Substitute;
 using tserver::TabletServerErrorPB;
 
+void MultiStageAlterTable::CopySchemaDetailsToFullyApplied(SysTablesEntryPB* pb) {
+  VLOG(4) << "Setting fully_applied_schema_version to " << pb->version();
+  pb->mutable_fully_applied_schema()->CopyFrom(pb->schema());
+  pb->set_fully_applied_schema_version(pb->version());
+  pb->mutable_fully_applied_indexes()->CopyFrom(pb->indexes());
+  if (pb->has_index_info()) {
+    pb->mutable_fully_applied_index_info()->CopyFrom(pb->index_info());
+  }
+}
+
 Status MultiStageAlterTable::ClearAlteringState(
     CatalogManager* catalog_manager,
     const scoped_refptr<TableInfo>& table,
@@ -203,19 +213,7 @@ Status MultiStageAlterTable::UpdateIndexPermission(
           indexed_table_data.pb.version(), *current_version);
     }
 
-    indexed_table_data.pb.mutable_fully_applied_schema()->CopyFrom(
-        indexed_table_data.pb.schema());
-    VLOG(1) << "Setting fully_applied_schema_version to "
-            << indexed_table_data.pb.version();
-    indexed_table_data.pb.set_fully_applied_schema_version(
-        indexed_table_data.pb.version());
-    indexed_table_data.pb.mutable_fully_applied_indexes()->CopyFrom(
-        indexed_table_data.pb.indexes());
-    if (indexed_table_data.pb.has_index_info()) {
-      indexed_table_data.pb.mutable_fully_applied_index_info()->CopyFrom(
-          indexed_table_data.pb.index_info());
-    }
-
+    CopySchemaDetailsToFullyApplied(&indexed_table_data.pb);
     for (int i = 0; i < indexed_table_data.pb.indexes_size(); i++) {
       IndexInfoPB *idx_pb = indexed_table_data.pb.mutable_indexes(i);
       if (perm_mapping.find(idx_pb->table_id()) != perm_mapping.end()) {
@@ -223,15 +221,7 @@ Status MultiStageAlterTable::UpdateIndexPermission(
         idx_pb->set_index_permissions(new_perm);
       }
     }
-    VLOG(1) << "Updating index permissions of size " << indexed_table_data.pb.indexes_size()
-            << " to " << ToString(perm_mapping) << ". schema_version from "
-            << indexed_table_data.pb.version() << " to " << indexed_table_data.pb.version() + 1;
-
-    VLOG(1) << "Before updating indexed_table_data.pb.version() is "
-            << indexed_table_data.pb.version();
     indexed_table_data.pb.set_version(indexed_table_data.pb.version() + 1);
-    VLOG(1) << "After updating indexed_table_data.pb.version() is "
-            << indexed_table_data.pb.version();
     indexed_table_data.set_state(SysTablesEntryPB::ALTERING,
                                  Substitute("Alter table version=$0 ts=$1",
                                             indexed_table_data.pb.version(),
@@ -274,18 +264,7 @@ Status MultiStageAlterTable::StartBackfillingData(
     TRACE("Locking indexed table");
     auto l = indexed_table->LockForWrite();
     auto &indexed_table_data = *l->mutable_data();
-    indexed_table_data.pb.mutable_fully_applied_schema()->CopyFrom(
-        indexed_table_data.pb.schema());
-    VLOG(1) << "Setting fully_applied_schema_version to "
-            << indexed_table_data.pb.version();
-    indexed_table_data.pb.set_fully_applied_schema_version(
-        indexed_table_data.pb.version());
-    indexed_table_data.pb.mutable_fully_applied_indexes()->CopyFrom(
-        indexed_table_data.pb.indexes());
-    if (indexed_table_data.pb.has_index_info()) {
-      indexed_table_data.pb.mutable_fully_applied_index_info()->CopyFrom(
-          indexed_table_data.pb.index_info());
-    }
+    CopySchemaDetailsToFullyApplied(&indexed_table_data.pb);
     // Update sys-catalog with the new indexed table info.
     TRACE("Updating indexed table metadata on disk");
     RETURN_NOT_OK_PREPEND(
@@ -298,9 +277,18 @@ Status MultiStageAlterTable::StartBackfillingData(
     l->Commit();
   }
   indexed_table->SetIsBackfilling(true);
+
+  scoped_refptr<NamespaceInfo> ns_info;
+  {
+    NamespaceIdentifierPB ns_identifier;
+    ns_identifier.set_id(indexed_table->namespace_id());
+    RETURN_NOT_OK_PREPEND(
+        catalog_manager->FindNamespace(ns_identifier, &ns_info),
+        "Getting namespace info for backfill");
+  }
   auto backfill_table = std::make_shared<BackfillTable>(
       catalog_manager->master_, catalog_manager->AsyncTaskPool(),
-      indexed_table, std::vector<IndexInfoPB>{index_pb});
+      indexed_table, std::vector<IndexInfoPB>{index_pb}, ns_info);
   backfill_table->Launch();
   return Status::OK();
 }
@@ -389,18 +377,23 @@ Status MultiStageAlterTable::LaunchNextTableInfoVersionIfNecessary(
   if (!indexes_to_delete.empty()) {
     index_info_to_update = indexes_to_delete[0];
     // TODO(Amit): #4039 Delete the index after ensuring that there is no pending txn.
+    Status s;
     WARN_NOT_OK(
-        catalog_manager->DeleteIndexInfoFromTable(
-            indexed_table->id(), index_info_to_update.table_id()),
+        (s = catalog_manager->DeleteIndexInfoFromTable(
+             indexed_table->id(), index_info_to_update.table_id())),
         yb::Format(
             "failed to delete index_info for $0 from $1", index_info_to_update.table_id(),
             indexed_table->id()));
-    return ClearAlteringState(catalog_manager, indexed_table, current_version);
+    if (s.ok()) {
+      catalog_manager->SendAlterTableRequest(indexed_table);
+    }
+    return Status::OK();
   }
 
   if (!indexes_to_backfill.empty()) {
     // TODO(Amit): Batch backfill for different indexes.
     index_info_to_update = indexes_to_backfill[0];
+    VLOG(3) << "Start backfilling for " << yb::ToString(index_info_to_update);
     TRACE("Starting backfill process");
     VLOG(1) << ("Starting backfill process");
     WARN_NOT_OK(
@@ -457,9 +450,10 @@ void BackfillTableJob::SetState(MonitoredTaskState new_state) {
 // -----------------------------------------------------------------------------------------------
 BackfillTable::BackfillTable(Master *master, ThreadPool *callback_pool,
                              const scoped_refptr<TableInfo> &indexed_table,
-                             std::vector<IndexInfoPB> indexes)
+                             std::vector<IndexInfoPB> indexes,
+                             const scoped_refptr<NamespaceInfo> &ns_info)
     : master_(master), callback_pool_(callback_pool),
-      indexed_table_(indexed_table), indexes_to_build_(indexes) {
+      indexed_table_(indexed_table), indexes_to_build_(indexes), ns_info_(ns_info) {
   LOG_IF(DFATAL, indexes_to_build_.size() != 1)
       << "As of Dec 2019, we only support "
       << "building one index at a time. indexes_to_build_.size() = "
@@ -535,6 +529,10 @@ std::string BackfillTable::description() const {
            : Format("Waiting to GetSafeTime from $0/$1 tablets", num_pending, num_tablets)));
 }
 
+const std::string BackfillTable::GetNamespaceName() const {
+  return ns_info_->name();
+}
+
 Status BackfillTable::UpdateSafeTime(const Status& s, HybridTime ht) {
   if (!s.ok()) {
     // Move on to ABORTED permission.
@@ -559,7 +557,7 @@ Status BackfillTable::UpdateSafeTime(const Status& s, HybridTime ht) {
     read_timestamp = read_time_for_backfill_;
   }
 
-  // If OK then move on to READ permissions.
+  // If OK then move on to doing backfill.
   if (!timestamp_chosen() && --tablets_pending_ == 0) {
     LOG_WITH_PREFIX(INFO) << "Completed fetching SafeTime for the table "
                           << yb::ToString(indexed_table_) << " will be using "
@@ -970,6 +968,9 @@ bool BackfillChunk::SendRequest(int attempt) {
   req.set_read_at_hybrid_time(backfill_tablet_->read_time_for_backfill().ToUint64());
   req.set_schema_version(backfill_tablet_->schema_version());
   req.set_start_key(start_key_);
+  if (backfill_tablet_->tablet()->table()->GetTableType() == TableType::PGSQL_TABLE_TYPE) {
+    req.set_namespace_name(backfill_tablet_->GetNamespaceName());
+  }
   for (const IndexInfoPB& idx_info : backfill_tablet_->indexes()) {
     req.add_indexes()->CopyFrom(idx_info);
   }

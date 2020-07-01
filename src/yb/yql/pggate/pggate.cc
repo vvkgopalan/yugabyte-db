@@ -395,6 +395,10 @@ Result<PgTableDesc::ScopedRefPtr> PgApiImpl::LoadTable(const PgObjectId& table_i
   return pg_session_->LoadTable(table_id);
 }
 
+void PgApiImpl::InvalidateTableCache(const PgObjectId& table_id) {
+  pg_session_->InvalidateTableCache(table_id);
+}
+
 //--------------------------------------------------------------------------------------------------
 
 Status PgApiImpl::NewCreateTable(const char *database_name,
@@ -821,6 +825,14 @@ Status PgApiImpl::InsertStmtSetUpsertMode(PgStatement *handle) {
   return Status::OK();
 }
 
+Status PgApiImpl::InsertStmtSetWriteTime(PgStatement *handle, const HybridTime write_time) {
+  if (!PgStatement::IsValidStmt(handle, StmtOp::STMT_INSERT)) {
+    // Invalid handle.
+    return STATUS(InvalidArgument, "Invalid statement handle");
+  }
+  RETURN_NOT_OK(down_cast<PgInsert*>(handle)->SetWriteTime(write_time));
+  return Status::OK();
+}
 
 // Update ------------------------------------------------------------------------------------------
 

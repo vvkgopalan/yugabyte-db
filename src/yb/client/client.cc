@@ -580,6 +580,30 @@ Status YBClient::GetTableSchemaById(const TableId& table_id, std::shared_ptr<YBT
   return data_->GetTableSchemaById(this, table_id, deadline, info, callback);
 }
 
+Result<IndexPermissions> YBClient::GetIndexPermissions(
+    const TableId& table_id,
+    const TableId& index_id) {
+  auto deadline = CoarseMonoClock::Now() + default_admin_operation_timeout();
+  return data_->GetIndexPermissions(
+      this,
+      table_id,
+      index_id,
+      deadline);
+}
+
+Result<IndexPermissions> YBClient::GetIndexPermissions(
+    const YBTableName& table_name,
+    const YBTableName& index_name) {
+  auto deadline = CoarseMonoClock::Now() + default_admin_operation_timeout();
+  YBTableInfo table_info = VERIFY_RESULT(GetYBTableInfo(table_name));
+  YBTableInfo index_info = VERIFY_RESULT(GetYBTableInfo(index_name));
+  return data_->GetIndexPermissions(
+      this,
+      table_info.table_id,
+      index_info.table_id,
+      deadline);
+}
+
 Result<IndexPermissions> YBClient::WaitUntilIndexPermissionsAtLeast(
     const TableId& table_id,
     const TableId& index_id,
@@ -1310,8 +1334,6 @@ Status YBClient::GetTabletsAndUpdateCache(
   RETURN_NOT_OK(GetTablets(table_name, max_tablets, &tablets, RequireTabletsRunning::kFalse));
   FillFromRepeatedTabletLocations(tablets, tablet_uuids, ranges, locations);
 
-  // RequireTabletsRunning::kFalse guarantees that we don't have gaps in tablets partitions as
-  // ProcessTabletLocations expects.
   RETURN_NOT_OK(
       data_->meta_cache_->ProcessTabletLocations(tablets, nullptr /* partition_group_start */));
 

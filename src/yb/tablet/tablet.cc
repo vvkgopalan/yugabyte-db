@@ -32,6 +32,8 @@
 
 #include "yb/tablet/tablet.h"
 
+#include <libpq-fe.h>
+
 #include <algorithm>
 #include <iterator>
 #include <limits>
@@ -123,6 +125,8 @@
 #include "yb/util/locks.h"
 #include "yb/util/mem_tracker.h"
 #include "yb/util/metrics.h"
+#include "yb/util/net/net_util.h"
+#include "yb/util/pg_connstr.h"
 #include "yb/util/scope_exit.h"
 #include "yb/util/slice.h"
 #include "yb/util/stopwatch.h"
@@ -348,20 +352,37 @@ docdb::PartialRangeKeyIntents UsePartialRangeKeyIntents(const RaftGroupMetadata&
   return docdb::PartialRangeKeyIntents(metadata.table_type() == TableType::PGSQL_TABLE_TYPE);
 }
 
-} // namespace
-
-string DocDbOpIds::ToString() const {
-  return Format("{ regular: $0 intents: $1 }", regular, intents);
-}
-
-namespace {
-
 std::string MakeTabletLogPrefix(
     const TabletId& tablet_id, const std::string& log_prefix_suffix) {
   return Format("T $0$1: ", tablet_id, log_prefix_suffix);
 }
 
 } // namespace
+
+string DocDbOpIds::ToString() const {
+  return Format("{ regular: $0 intents: $1 }", regular, intents);
+}
+
+class Tablet::RegularRocksDbListener : public rocksdb::EventListener {
+ public:
+  RegularRocksDbListener(Tablet* tablet, const std::string& log_prefix)
+      : tablet_(*CHECK_NOTNULL(tablet)),
+        log_prefix_(log_prefix) {}
+
+  void OnCompactionCompleted(rocksdb::DB* db, const rocksdb::CompactionJobInfo& ci) override {
+    if (ci.is_full_compaction) {
+      auto& metadata = *CHECK_NOTNULL(tablet_.metadata());
+      if (!metadata.has_been_fully_compacted()) {
+        metadata.set_has_been_fully_compacted(true);
+        ERROR_NOT_OK(metadata.Flush(), log_prefix_);
+      }
+    }
+  }
+
+ private:
+  Tablet& tablet_;
+  const std::string log_prefix_;
+};
 
 Tablet::Tablet(const TabletInitData& data)
     : key_schema_(data.metadata->schema()->CreateKeyProjection()),
@@ -383,7 +404,7 @@ Tablet::Tablet(const TabletInitData& data)
       txns_enabled_(data.txns_enabled),
       retention_policy_(std::make_shared<TabletRetentionPolicy>(clock_, metadata_.get())) {
   CHECK(schema()->has_column_ids());
-  LOG_WITH_PREFIX(INFO) << " Schema version for  " << metadata_->table_name() << " is "
+  LOG_WITH_PREFIX(INFO) << "Schema version for " << metadata_->table_name() << " is "
                         << metadata_->schema_version();
 
   if (data.metric_registry) {
@@ -641,12 +662,16 @@ Status Tablet::OpenKeyValueTablet() {
   rocksdb_options.level0_slowdown_writes_trigger = std::numeric_limits<int>::max();
   rocksdb_options.level0_stop_writes_trigger = std::numeric_limits<int>::max();
 
+  rocksdb::Options regular_rocksdb_options(rocksdb_options);
+  regular_rocksdb_options.listeners.push_back(
+      std::make_shared<RegularRocksDbListener>(this, regular_rocksdb_options.log_prefix));
+
   const string db_dir = metadata()->rocksdb_dir();
   RETURN_NOT_OK(CreateTabletDirectories(db_dir, metadata()->fs_manager()));
 
   LOG(INFO) << "Opening RocksDB at: " << db_dir;
   rocksdb::DB* db = nullptr;
-  rocksdb::Status rocksdb_open_status = rocksdb::DB::Open(rocksdb_options, db_dir, &db);
+  rocksdb::Status rocksdb_open_status = rocksdb::DB::Open(regular_rocksdb_options, db_dir, &db);
   if (!rocksdb_open_status.ok()) {
     LOG_WITH_PREFIX(ERROR) << "Failed to open a RocksDB database in directory " << db_dir << ": "
                            << rocksdb_open_status;
@@ -1584,7 +1609,6 @@ Result<bool> Tablet::HasScanReachedMaxPartitionKey(
     }
   } else if (pgsql_read_request.has_max_partition_key() &&
              !pgsql_read_request.max_partition_key().empty()) {
-
     docdb::DocKey partition_doc_key(*metadata_->schema());
     VERIFY_RESULT(partition_doc_key.DecodeFrom(
         partition_key, docdb::DocKeyPart::kWholeDocKey, docdb::AllowSpecial::kTrue));
@@ -1615,7 +1639,6 @@ CHECKED_STATUS Tablet::CreatePagingStateForRead(const PgsqlReadRequestPB& pgsql_
       !response->has_paging_state() &&
       (!pgsql_read_request.has_limit() || row_count < pgsql_read_request.limit() ||
        pgsql_read_request.return_paging_state())) {
-
     // For backward scans partition_key_start must be used as next_partition_key.
     // Client level logic will check it and route next request to the preceding tablet.
     const auto& next_partition_key =
@@ -1877,12 +1900,14 @@ HybridTime Tablet::ApplierSafeTime(HybridTime min_allowed, CoarseTimePoint deadl
 Status Tablet::CreatePreparedChangeMetadata(ChangeMetadataOperationState *operation_state,
                                             const Schema* schema) {
   if (schema) {
-    if (!key_schema_.KeyEquals(*schema)) {
+    auto key_schema = GetKeySchema(
+        operation_state->has_table_id() ? operation_state->table_id() : "");
+    if (!key_schema.KeyEquals(*schema)) {
       return STATUS_FORMAT(
           InvalidArgument,
           "Schema keys cannot be altered. New schema key: $0. Existing schema key: $1",
           schema->CreateKeyProjection(),
-          key_schema_.CreateKeyProjection());
+          key_schema);
     }
 
     if (!schema->has_column_ids()) {
@@ -1935,13 +1960,17 @@ Status Tablet::MarkBackfillDone() {
 }
 
 Status Tablet::AlterSchema(ChangeMetadataOperationState *operation_state) {
-  DCHECK(key_schema_.KeyEquals(*DCHECK_NOTNULL(operation_state->schema())))
-      << "Schema keys cannot be altered";
+  auto current_table_info = VERIFY_RESULT(metadata_->GetTableInfo(
+        operation_state->request()->has_alter_table_id() ?
+        operation_state->request()->alter_table_id() : ""));
+  auto key_schema = current_table_info->schema.CreateKeyProjection();
+
+  DSCHECK(key_schema.KeyEquals(*DCHECK_NOTNULL(operation_state->schema())), IllegalState,
+      "Schema keys cannot be altered");
 
   auto op_pause = PauseReadWriteOperations();
   RETURN_NOT_OK(op_pause);
 
-  auto current_table_info = metadata_->primary_table_info();
   // If the current version >= new version, there is nothing to do.
   if (current_table_info->schema_version >= operation_state->schema_version()) {
     LOG_WITH_PREFIX(INFO)
@@ -1950,14 +1979,14 @@ Status Tablet::AlterSchema(ChangeMetadataOperationState *operation_state) {
     return Status::OK();
   }
 
-  LOG_WITH_PREFIX(INFO) << "Alter schema from " << schema()->ToString()
+  LOG_WITH_PREFIX(INFO) << "Alter schema from " << current_table_info->schema.ToString()
                         << " version " << current_table_info->schema_version
                         << " to " << operation_state->schema()->ToString()
                         << " version " << operation_state->schema_version();
 
   // Find out which columns have been deleted in this schema change, and add them to metadata.
   vector<DeletedColumn> deleted_cols;
-  for (const auto& col : schema()->column_ids()) {
+  for (const auto& col : current_table_info->schema.column_ids()) {
     if (operation_state->schema()->find_column_by_id(col) == Schema::kColumnNotFound) {
       deleted_cols.emplace_back(col, clock_->Now());
       LOG_WITH_PREFIX(INFO) << "Column " << col << " recorded as deleted.";
@@ -1965,7 +1994,7 @@ Status Tablet::AlterSchema(ChangeMetadataOperationState *operation_state) {
   }
 
   metadata_->SetSchema(*operation_state->schema(), operation_state->index_map(), deleted_cols,
-                       operation_state->schema_version());
+                       operation_state->schema_version(), current_table_info->table_id);
   if (operation_state->has_new_table_name()) {
     metadata_->SetTableName(operation_state->new_table_name());
     if (metric_entity_) {
@@ -1977,9 +2006,8 @@ Status Tablet::AlterSchema(ChangeMetadataOperationState *operation_state) {
   ResetYBMetaDataCache();
 
   // Create transaction manager and index table metadata cache for secondary index update.
-  auto table_info = metadata_->primary_table_info();
-  if (!table_info->index_map.empty()) {
-    if (table_info->schema.table_properties().is_transactional() && !transaction_manager_) {
+  if (!operation_state->index_map().empty()) {
+    if (current_table_info->schema.table_properties().is_transactional() && !transaction_manager_) {
       transaction_manager_.emplace(client_future_.get(),
                                    scoped_refptr<server::Clock>(clock_),
                                    local_tablet_filter_);
@@ -2004,17 +2032,88 @@ Status Tablet::AlterWalRetentionSecs(ChangeMetadataOperationState* operation_sta
       operation_state->ToString());
 }
 
+// Assume that we are already in the Backfilling mode.
+Result<std::string> Tablet::BackfillIndexesForYsql(
+    const std::vector<IndexInfo>& indexes,
+    const std::string& backfill_from,
+    const CoarseTimePoint deadline,
+    const HybridTime read_time,
+    const HostPort& pgsql_proxy_bind_address,
+    const std::string& database_name) {
+  if (PREDICT_FALSE(FLAGS_TEST_slowdown_backfill_by_ms > 0)) {
+    TRACE("Sleeping for $0 ms", FLAGS_TEST_slowdown_backfill_by_ms);
+    SleepFor(MonoDelta::FromMilliseconds(FLAGS_TEST_slowdown_backfill_by_ms));
+  }
+  LOG(INFO) << "Begin " << __func__
+            << " at " << read_time
+            << " for " << yb::ToString(indexes);
+
+  if (!backfill_from.empty()) {
+    return STATUS(
+        InvalidArgument,
+        "YSQL index backfill does not support backfill_from, yet");
+  }
+
+  // Construct connection string.
+  // TODO(jason): handle "yugabyte" role being password protected
+  std::string conn_str = Format(
+      "dbname='$0' host=$1 port=$2 user=$3",
+      EscapePgConnStrValue(database_name),
+      pgsql_proxy_bind_address.host(),
+      pgsql_proxy_bind_address.port(),
+      "yugabyte");
+  VLOG(1) << __func__ << ": libpq connection string: " << conn_str;
+
+  // Construct query string.
+  std::string index_oids;
+  {
+    std::stringstream ss;
+    for (auto& index : indexes) {
+      Oid index_oid = VERIFY_RESULT(GetPgsqlTableOid(index.table_id()));
+      ss << index_oid << ",";
+    }
+    index_oids = ss.str();
+    index_oids.pop_back();
+  }
+  std::string partition_key = metadata_->partition()->partition_key_start();
+  // Ignoring the current situation where users can run BACKFILL INDEX queries themselves, this
+  // should be safe from injection attacks because the parameters only consist of characters
+  // [,0-9a-f].
+  // TODO(jason): pass deadline
+  std::string query_str = Format(
+      "BACKFILL INDEX $0 READ TIME $1 PARTITION x'$2';",
+      index_oids,
+      read_time.ToUint64(),
+      b2a_hex(partition_key));
+  VLOG(1) << __func__ << ": libpq query string: " << query_str;
+
+  // Connect and execute.
+  auto conn = PQconnectdb(conn_str.c_str());
+  auto res = PQexec(conn, query_str.c_str());
+  auto status = PQresultStatus(res);
+  PQclear(res);
+  PQfinish(conn);
+
+  // TODO(jason): more properly handle bad statuses
+  if (status == PGRES_FATAL_ERROR) {
+    return STATUS_FORMAT(
+        QLError,
+        "Got PQ status $0 with message \"$1\" when running \"$2\"",
+        status,
+        PQresultErrorMessage(res),
+        query_str);
+  }
+  // TODO(jason): handle partially finished backfills.  How am I going to get that info?  From
+  // response message by libpq or manual DocDB inspection?
+  return "";
+}
+
 // Should backfill the index with the information contained in this tablet.
 // Assume that we are already in the Backfilling mode.
 Result<std::string> Tablet::BackfillIndexes(const std::vector<IndexInfo> &indexes,
                                             const std::string& backfill_from,
                                             const CoarseTimePoint deadline,
                                             const HybridTime read_time) {
-  if (table_type_ == PGSQL_TABLE_TYPE) {
-    // TODO(jason): handle YSQL backfill.
-    // For now, mark the backfill as done.
-    return "";
-  }
   if (PREDICT_FALSE(FLAGS_TEST_slowdown_backfill_by_ms > 0)) {
     TRACE("Sleeping for $0 ms", FLAGS_TEST_slowdown_backfill_by_ms);
     SleepFor(MonoDelta::FromMilliseconds(FLAGS_TEST_slowdown_backfill_by_ms));
@@ -2039,9 +2138,9 @@ Result<std::string> Tablet::BackfillIndexes(const std::vector<IndexInfo> &indexe
       }
     }
   }
-  std::vector<std::string> index_names;
+  std::vector<std::string> index_ids;
   for (const IndexInfo& idx : indexes) {
-    index_names.push_back(idx.table_id());
+    index_ids.push_back(idx.table_id());
     for (const auto& idx_col : idx.columns()) {
       if (col_ids_set.find(idx_col.indexed_column_id) == col_ids_set.end()) {
         col_ids_set.insert(idx_col.indexed_column_id);
@@ -2090,7 +2189,7 @@ Result<std::string> Tablet::BackfillIndexes(const std::vector<IndexInfo> &indexe
   VLOG(1) << "Processed " << num_rows_processed << " rows";
   RETURN_NOT_OK(FlushIndexBatchIfRequired(&index_requests, /* forced */ true));
   LOG(INFO) << "Done BackfillIndexes at " << read_time << " for "
-            << yb::ToString(index_names) << " until "
+            << yb::ToString(index_ids) << " until "
             << (resume_from.empty() ? "<end of the tablet>"
                                     : b2a_hex(resume_from));
   return resume_from;
