@@ -90,6 +90,12 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 
 	// TODO: what needs to be done in aclchk.c?
 
+	if (MyDatabaseColocated) {
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot use tablegroups in a colocated database")));
+	}
+
 	/*
 	 * Check that there is no other tablegroup by this name.
 	 */

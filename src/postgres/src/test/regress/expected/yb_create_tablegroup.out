@@ -1,0 +1,131 @@
+--
+-- YB_TABLEGROUP Testsuite: Testing Statments for TABLEGROUP.
+--
+--
+-- pg_catalog alterations. Validate columns of pg_tablegroup and pg_class.
+--
+\d pg_tablegroup
+           Table "pg_catalog.pg_tablegroup"
+   Column   |  Type  | Collation | Nullable | Default 
+------------+--------+-----------+----------+---------
+ grpname    | name   |           | not null | 
+ grpoptions | text[] |           |          | 
+Indexes:
+    "pg_tablegroup_oid_index" PRIMARY KEY, lsm (oid)
+
+\d pg_class
+                     Table "pg_catalog.pg_class"
+       Column        |     Type     | Collation | Nullable | Default 
+---------------------+--------------+-----------+----------+---------
+ relname             | name         |           | not null | 
+ relnamespace        | oid          |           | not null | 
+ reltype             | oid          |           | not null | 
+ reloftype           | oid          |           | not null | 
+ relowner            | oid          |           | not null | 
+ relam               | oid          |           | not null | 
+ relfilenode         | oid          |           | not null | 
+ reltablespace       | oid          |           | not null | 
+ relpages            | integer      |           | not null | 
+ reltuples           | real         |           | not null | 
+ relallvisible       | integer      |           | not null | 
+ reltoastrelid       | oid          |           | not null | 
+ relhasindex         | boolean      |           | not null | 
+ relisshared         | boolean      |           | not null | 
+ relpersistence      | "char"       |           | not null | 
+ relkind             | "char"       |           | not null | 
+ relnatts            | smallint     |           | not null | 
+ relchecks           | smallint     |           | not null | 
+ relhasoids          | boolean      |           | not null | 
+ relhasrules         | boolean      |           | not null | 
+ relhastriggers      | boolean      |           | not null | 
+ relhassubclass      | boolean      |           | not null | 
+ relrowsecurity      | boolean      |           | not null | 
+ relforcerowsecurity | boolean      |           | not null | 
+ relispopulated      | boolean      |           | not null | 
+ relreplident        | "char"       |           | not null | 
+ relispartition      | boolean      |           | not null | 
+ relrewrite          | oid          |           | not null | 
+ relfrozenxid        | xid          |           | not null | 
+ relminmxid          | xid          |           | not null | 
+ reltablegroup       | oid          |           | not null | 
+ relacl              | aclitem[]    |           |          | 
+ reloptions          | text[]       |           |          | 
+ relpartbound        | pg_node_tree |           |          | 
+Indexes:
+    "pg_class_oid_index" PRIMARY KEY, lsm (oid)
+    "pg_class_relname_nsp_index" UNIQUE, lsm (relname, relnamespace)
+    "pg_class_tblgrp_index" lsm (reltablegroup)
+    "pg_class_tblspc_relfilenode_index" lsm (reltablespace, relfilenode)
+
+--
+-- CREATE TABLEGROUP
+--
+CREATE TABLEGROUP tgroup1;
+CREATE TABLEGROUP tgroup2;
+CREATE TABLEGROUP tgroup3;
+CREATE TABLE tgroup_test1 (col1 int, col2 int) TABLEGROUP tgroup1;
+CREATE TABLE tgroup_test2 (col1 int, col2 int) TABLEGROUP tgroup1;
+SELECT * FROM pg_tablegroup;
+ grpname | grpoptions 
+---------+------------
+ tgroup1 | 
+ tgroup2 | 
+ tgroup3 | 
+(3 rows)
+
+SELECT relname FROM pg_class WHERE reltablegroup != 0;
+   relname    
+--------------
+ tgroup_test1 
+ tgroup_test2 
+(2 rows)
+
+CREATE INDEX ON tgroup_test1(col2) TABLEGROUP tgroup1;
+CREATE TABLE tgroup_test3 (col1 int, col2 int) TABLEGROUP tgroup2;
+SELECT relname, relhasindex
+    FROM pg_tablegroup, pg_class
+    WHERE pg_tablegroup.oid = pg_class.reltablegroup;
+        relname        | relhasindex 
+-----------------------+-------------
+ tgroup_test1          | t           
+ tgroup_test2          | f           
+ tgroup_test1_col2_idx | f           
+ tgroup_test3          | f           
+(4 rows)
+
+-- These should fail.
+CREATE TABLEGROUP tgroup1;
+ERROR:  tablegroup "tgroup1" already exists
+CREATE TABLE tgroup_test (col1 int, col2 int) TABLEGROUP bad_tgroupname;
+ERROR:  tablegroup "bad_tgroupname" does not exist
+CREATE TABLE tgroup_optout (col1 int, col2 int) WITH (colocated=false) TABLEGROUP tgroup1;
+ERROR:  cannot set colocated false with tablegroup
+CREATE TABLE tgroup_optout (col1 int, col2 int) WITH (colocated=false) TABLEGROUP bad_tgroupname;
+ERROR:  tablegroup "bad_tgroupname" does not exist
+CREATE TEMP TABLE tgroup_temp (col1 int, col2 int) TABLEGROUP tgroup1;
+ERROR:  Cannot use TABLEGROUP with TEMP table.
+--
+-- DROP TABLEGROUP
+--
+DROP TABLEGROUP tgroup3;
+-- These should fail.
+DROP TABLEGROUP tgroup1;
+ERROR:  tablegroup "tgroup1" is not empty
+DROP TABLEGROUP bad_tgroupname;
+ERROR:  tablegroup "bad_tgroupname" does not exist
+-- This drop should work now.
+DROP TABLE tgroup_test1;
+DROP TABLE tgroup_test2;
+DROP TABLEGROUP tgroup1;
+--
+-- Interactions with colocated database.
+--
+CREATE DATABASE db_colocated colocated=true;
+\c db_colocated
+-- These should fail.
+CREATE TABLEGROUP tgroup1;
+ERROR:  cannot use tablegroups in a colocated database
+CREATE TABLE tgroup_test (col1 int, col2 int) TABLEGROUP tgroup1;
+ERROR:  cannot use tablegroups in a colocated database
+CREATE TABLE tgroup_optout (col1 int, col2 int) WITH (colocated=false) TABLEGROUP tgroup1;
+ERROR:  cannot use tablegroups in a colocated database
