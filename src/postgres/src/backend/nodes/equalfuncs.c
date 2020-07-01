@@ -1797,7 +1797,6 @@ static bool
 _equalDropTableGroupStmt(const DropTableGroupStmt *a, const DropTableGroupStmt *b)
 {
 	COMPARE_STRING_FIELD(tablegroupname);
-	COMPARE_NODE_FIELD(options);
 	return true;
 }
 

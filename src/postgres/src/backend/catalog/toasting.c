@@ -339,7 +339,7 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 				 BTREE_AM_OID,
 				 rel->rd_rel->reltablespace,
 				 collationObjectId, classObjectId, coloptions, (Datum) 0,
-				 INDEX_CREATE_IS_PRIMARY, 0, true, true, NULL, NULL);
+				 INDEX_CREATE_IS_PRIMARY, 0, true, true, NULL, NULL, InvalidOid);
 
 	heap_close(toast_rel, NoLock);
 

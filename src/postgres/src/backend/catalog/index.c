@@ -770,7 +770,8 @@ index_create(Relation heapRelation,
 			 bool allow_system_table_mods,
 			 bool is_internal,
 			 Oid *constraintId,
-			 OptSplit *split_options)
+			 OptSplit *split_options,
+			 Oid tableGroupId)
 {
 	Oid			heapRelationId = RelationGetRelid(heapRelation);
 	Relation	pg_class;
@@ -955,7 +956,7 @@ index_create(Relation heapRelation,
 								shared_relation,
 								mapped_relation,
 								allow_system_table_mods,
-								InvalidOid);
+								tableGroupId);
 
 	Assert(indexRelationId == RelationGetRelid(indexRelation));
 
