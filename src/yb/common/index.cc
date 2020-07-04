@@ -179,6 +179,26 @@ int32_t IndexInfo::IsExprCovered(const string& expr_name) const {
   return -1;
 }
 
+// Check for dependency is used for DDL operations, so it does not need to be fast. As a result,
+// the dependency list does not need to be cached in a member id list for fast access.
+bool IndexInfo::CheckColumnDependency(ColumnId column_id) const {
+  for (const IndexInfo::IndexColumn &index_col : columns_) {
+    // The protobuf data contains IDs of all columns that this index is referencing.
+    // Examples:
+    // 1. Index by column
+    // - INDEX ON tab (a_column)
+    // - The ID of "a_column" is included in protobuf data.
+    //
+    // 2. Index by expression of column:
+    // - INDEX ON tab (j_column->>'field')
+    // - The ID of "j_column" is included in protobuf data.
+    if (index_col.indexed_column_id == column_id) {
+      return true;
+    }
+  }
+  return false;
+}
+
 int32_t IndexInfo::FindKeyIndex(const string& key_expr_name) const {
   for (int32_t idx = 0; idx < key_column_count(); idx++) {
     const auto& col = columns_[idx];

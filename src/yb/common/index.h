@@ -120,6 +120,9 @@ class IndexInfo {
     return has_index_by_expr_;
   }
 
+  // Check if this index is dependent on the given column.
+  bool CheckColumnDependency(ColumnId column_id) const;
+
  private:
   const TableId table_id_;            // Index table id.
   const TableId indexed_table_id_;    // Indexed table id.

@@ -686,7 +686,8 @@ YBCCreateIndex(const char *indexName,
 			   Datum reloptions,
 			   Oid indexId,
 			   Relation rel,
-			   OptSplit *split_options)
+			   OptSplit *split_options,
+			   const bool skip_index_backfill)
 {
 	char *db_name	  = get_database_name(MyDatabaseId);
 	char *schema_name = get_namespace_name(RelationGetNamespace(rel));
@@ -722,6 +723,7 @@ YBCCreateIndex(const char *indexName,
 									   RelationGetRelid(rel),
 									   rel->rd_rel->relisshared,
 									   indexInfo->ii_Unique,
+									   skip_index_backfill,
 									   false, /* if_not_exists */
 									   &handle));
 

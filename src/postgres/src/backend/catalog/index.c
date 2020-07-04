@@ -783,6 +783,7 @@ index_create(Relation heapRelation,
 			 bool is_internal,
 			 Oid *constraintId,
 			 OptSplit *split_options,
+			 const bool skip_index_backfill,
 			 Oid tableGroupId)
 {
 	Oid			heapRelationId = RelationGetRelid(heapRelation);
@@ -985,7 +986,8 @@ index_create(Relation heapRelation,
 					   reloptions,
 					   indexRelationId,
 					   heapRelation,
-					   split_options);
+					   split_options,
+					   skip_index_backfill);
 	}
 
 	/*
