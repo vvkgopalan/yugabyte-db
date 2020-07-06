@@ -2213,7 +2213,6 @@ typedef struct DropTableGroupStmt
 {
 	NodeTag		type;
 	char	   *tablegroupname;
-	List 	   *options;
 } DropTableGroupStmt;
 
 /* ----------------------

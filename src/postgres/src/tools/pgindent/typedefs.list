@@ -719,6 +719,7 @@ FormData_pg_statistic
 FormData_pg_statistic_ext
 FormData_pg_subscription
 FormData_pg_subscription_rel
+FormData_pg_tablegroup
 FormData_pg_tablespace
 FormData_pg_transform
 FormData_pg_trigger
@@ -729,8 +730,6 @@ FormData_pg_ts_parser
 FormData_pg_ts_template
 FormData_pg_type
 FormData_pg_user_mapping
-FormData_pg_tablegroup
-Form_pg_tablegroup
 Form_pg_aggregate
 Form_pg_am
 Form_pg_amop
@@ -778,6 +777,7 @@ Form_pg_statistic
 Form_pg_statistic_ext
 Form_pg_subscription
 Form_pg_subscription_rel
+Form_pg_tablegroup
 Form_pg_tablespace
 Form_pg_transform
 Form_pg_trigger

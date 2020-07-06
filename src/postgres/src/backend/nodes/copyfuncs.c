@@ -5398,17 +5398,17 @@ copyObjectImpl(const void *from)
 		case T_DiscardStmt:
 			retval = _copyDiscardStmt(from);
 			break;
-		case T_CreateTableSpaceStmt:
-			retval = _copyCreateTableSpaceStmt(from);
-			break;
-		case T_DropTableSpaceStmt:
-			retval = _copyDropTableSpaceStmt(from);
-			break;
 		case T_CreateTableGroupStmt:
 			retval = _copyCreateTableGroupStmt(from);
 			break;
 		case T_DropTableGroupStmt:
 			retval = _copyDropTableGroupStmt(from);
+			break;
+		case T_CreateTableSpaceStmt:
+			retval = _copyCreateTableSpaceStmt(from);
+			break;
+		case T_DropTableSpaceStmt:
+			retval = _copyDropTableSpaceStmt(from);
 			break;
 		case T_AlterTableSpaceOptionsStmt:
 			retval = _copyAlterTableSpaceOptionsStmt(from);
