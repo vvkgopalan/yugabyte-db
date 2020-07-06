@@ -84,17 +84,12 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 	bool		nulls[Natts_pg_tablegroup];
 	HeapTuple	tuple;
 	Oid			tablegroupoid;
+	Oid 		ownerId;
 
-	// TODO: Any need to check permissions? acl?
-	// TODO: Any need to have a tablegroup owner?
-
-	// TODO: what needs to be done in aclchk.c?
-
-	if (MyDatabaseColocated) {
+	if (MyDatabaseColocated)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot use tablegroups in a colocated database")));
-	}
 
 	/*
 	 * Check that there is no other tablegroup by this name.
@@ -104,6 +99,11 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("tablegroup \"%s\" already exists",
 						stmt->tablegroupname)));
+
+	if (stmt->owner)
+		ownerId = get_rolespec_oid(stmt->owner, false);
+	else
+		ownerId = GetUserId();
 
 	/*
 	 * Insert tuple into pg_tablegroup.  The purpose of doing this first is to
