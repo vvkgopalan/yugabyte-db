@@ -3439,16 +3439,16 @@ equal(const void *a, const void *b)
 		case T_DiscardStmt:
 			retval = _equalDiscardStmt(a, b);
 			break;
+		case T_CreateTableGroupStmt:
+			retval = _equalCreateTableGroupStmt(a, b);
+			break;
+		case T_DropTableGroupStmt:
+			retval = _equalDropTableGroupStmt(a, b);
+			break;
 		case T_CreateTableSpaceStmt:
 			retval = _equalCreateTableSpaceStmt(a, b);
 			break;
 		case T_DropTableSpaceStmt:
-			retval = _equalDropTableSpaceStmt(a, b);
-			break;
-		case T_CreateTableGroupStmt:
-			retval = _equalCreateTableSpaceStmt(a, b);
-			break;
-		case T_DropTableGroupStmt:
 			retval = _equalDropTableSpaceStmt(a, b);
 			break;
 		case T_AlterTableSpaceOptionsStmt:

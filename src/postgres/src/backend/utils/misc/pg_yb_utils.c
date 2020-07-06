@@ -780,8 +780,8 @@ static bool IsTransactionalDdlStatement(NodeTag node_tag) {
 		case T_CreateStmt:
 		case T_CreateSubscriptionStmt:
 		case T_CreateTableAsStmt:
-		case T_CreateTableSpaceStmt:
 		case T_CreateTableGroupStmt:
+		case T_CreateTableSpaceStmt:
 		case T_CreateTransformStmt:
 		case T_CreateTrigStmt:
 		case T_CreateUserMappingStmt:
@@ -792,8 +792,8 @@ static bool IsTransactionalDdlStatement(NodeTag node_tag) {
 		case T_DropRoleStmt:
 		case T_DropStmt:
 		case T_DropSubscriptionStmt:
-		case T_DropTableSpaceStmt:
 		case T_DropTableGroupStmt:
+		case T_DropTableSpaceStmt:
 		case T_DropUserMappingStmt:
 		case T_DropdbStmt:
 		// All T_Alter... tags from nodes.h:

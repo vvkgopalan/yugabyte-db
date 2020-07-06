@@ -196,8 +196,8 @@ check_xact_readonly(Node *parsetree)
 		case T_CreateStmt:
 		case T_CreateTableAsStmt:
 		case T_RefreshMatViewStmt:
-		case T_CreateTableSpaceStmt:
 		case T_CreateTableGroupStmt:
+		case T_CreateTableSpaceStmt:
 		case T_CreateTransformStmt:
 		case T_CreateTrigStmt:
 		case T_CompositeTypeStmt:
@@ -207,8 +207,8 @@ check_xact_readonly(Node *parsetree)
 		case T_ViewStmt:
 		case T_DropStmt:
 		case T_DropdbStmt:
-		case T_DropTableSpaceStmt:
 		case T_DropTableGroupStmt:
+		case T_DropTableSpaceStmt:
 		case T_DropRoleStmt:
 		case T_GrantStmt:
 		case T_GrantRoleStmt:
@@ -552,7 +552,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 
 		case T_DropTableGroupStmt:
 			PreventInTransactionBlock(isTopLevel, "DROP TABLEGROUP");
-			//TODO
 			DropTableGroup((DropTableGroupStmt *) parsetree);
 			break;
 

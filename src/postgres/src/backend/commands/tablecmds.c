@@ -626,11 +626,10 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	/* Select tablegroup to use.  If not specified, InvalidOid. */
 	if (stmt->tablegroupname)
 	{
-		if (MyDatabaseColocated) {
+		if (MyDatabaseColocated)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("cannot use tablegroups in a colocated database")));
-		}
 		else
 			tablegroupId = get_tablegroup_oid(stmt->tablegroupname, false);
 	}

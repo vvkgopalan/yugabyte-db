@@ -300,7 +300,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		CreatedbStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
 		DropOpClassStmt DropOpFamilyStmt DropPLangStmt DropStmt
 		DropAssertStmt DropCastStmt DropRoleStmt
-		DropdbStmt DropTableSpaceStmt DropTableGroupStmt
+		DropdbStmt DropTableGroupStmt DropTableSpaceStmt
 		DropTransformStmt
 		DropUserMappingStmt ExplainStmt FetchStmt
 		GrantStmt GrantRoleStmt ImportForeignSchemaStmt IndexStmt InsertStmt
@@ -4764,7 +4764,7 @@ opt_procedural:
  *		QUERY:
  *             CREATE TABLEGROUP tablegroup
  * 		
- *		Later extend this to include COPARTITIONED and INTERLEAVED
+ *		TODO: Later extend this to include COPARTITIONED and INTERLEAVED
  *
  *****************************************************************************/
 
@@ -4785,12 +4785,11 @@ opt_procedural:
  *
  *****************************************************************************/
 
-DropTableGroupStmt: DROP TABLEGROUP name opt_reloptions
+DropTableGroupStmt: DROP TABLEGROUP name
  				{
  					parser_ybc_beta_feature(@1, "tablegroup");
  					DropTableGroupStmt *n = makeNode(DropTableGroupStmt);
  					n->tablegroupname = $3;
- 					n->options = $4;
  					$$ = (Node *) n;
  				}
  		;
