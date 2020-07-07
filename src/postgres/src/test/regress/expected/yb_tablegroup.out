@@ -5,11 +5,13 @@
 -- pg_catalog alterations. Validate columns of pg_tablegroup and pg_class.
 --
 \d pg_tablegroup
-           Table "pg_catalog.pg_tablegroup"
-   Column   |  Type  | Collation | Nullable | Default 
-------------+--------+-----------+----------+---------
- grpname    | name   |           | not null | 
- grpoptions | text[] |           |          | 
+            Table "pg_catalog.pg_tablegroup"
+   Column   |   Type    | Collation | Nullable | Default 
+------------+-----------+-----------+----------+---------
+ grpname    | name      |           | not null | 
+ grpowner   | oid       |           | not null | 
+ grpacl     | aclitem[] |           |          | 
+ grpoptions | text[]    |           |          | 
 Indexes:
     "pg_tablegroup_oid_index" PRIMARY KEY, lsm (oid)
 
@@ -65,12 +67,12 @@ CREATE TABLEGROUP tgroup2;
 CREATE TABLEGROUP tgroup3;
 CREATE TABLE tgroup_test1 (col1 int, col2 int) TABLEGROUP tgroup1;
 CREATE TABLE tgroup_test2 (col1 int, col2 int) TABLEGROUP tgroup1;
-SELECT * FROM pg_tablegroup;
- grpname | grpoptions 
----------+------------
- tgroup1 | 
- tgroup2 | 
- tgroup3 | 
+SELECT grpname FROM pg_tablegroup;
+ grpname 
+---------
+ tgroup1
+ tgroup2
+ tgroup3
 (3 rows)
 
 SELECT relname FROM pg_class WHERE reltablegroup != 0;
@@ -109,6 +111,8 @@ ERROR:  Cannot use TABLEGROUP with TEMP table.
 --
 DROP TABLEGROUP tgroup3;
 -- These should fail.
+CREATE TABLE tgroup_test4 (col1 int, col2 int) TABLEGROUP tgroup3;
+ERROR:  tablegroup "tgroup3" does not exist
 DROP TABLEGROUP tgroup1;
 ERROR:  tablegroup "tgroup1" is not empty
 DROP TABLEGROUP bad_tgroupname;
@@ -117,6 +121,8 @@ ERROR:  tablegroup "bad_tgroupname" does not exist
 DROP TABLE tgroup_test1;
 DROP TABLE tgroup_test2;
 DROP TABLEGROUP tgroup1;
+-- Create a tablegroup with the name of a dropped tablegroup.
+CREATE TABLEGROUP tgroup1; 
 --
 -- Interactions with colocated database.
 --

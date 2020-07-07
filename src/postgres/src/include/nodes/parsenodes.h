@@ -1696,6 +1696,7 @@ typedef enum ObjectType
 	OBJECT_STATISTIC_EXT,
 	OBJECT_TABCONSTRAINT,
 	OBJECT_TABLE,
+	OBJECT_TABLEGROUP,
 	OBJECT_TABLESPACE,
 	OBJECT_TRANSFORM,
 	OBJECT_TRIGGER,
@@ -2206,6 +2207,7 @@ typedef struct CreateTableGroupStmt
 {
 	NodeTag		type;
 	char	   *tablegroupname;
+	RoleSpec   *owner;
 	List 	   *options;
 } CreateTableGroupStmt;
 
