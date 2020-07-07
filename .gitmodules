@@ -4,6 +4,3 @@
 [submodule "thirdparty"]
 	path = thirdparty
 	url = https://github.com/yugabyte/yugabyte-db-thirdparty.git
-[submodule "submodules/yugabyte-installation"]
-	path = submodules/yugabyte-installation
-	url = https://github.com/yugabyte/yugabyte-installation

@@ -15,7 +15,7 @@ CREATE TABLEGROUP tgroup2;
 CREATE TABLEGROUP tgroup3;
 CREATE TABLE tgroup_test1 (col1 int, col2 int) TABLEGROUP tgroup1;
 CREATE TABLE tgroup_test2 (col1 int, col2 int) TABLEGROUP tgroup1;
-SELECT * FROM pg_tablegroup;
+SELECT grpname FROM pg_tablegroup;
 SELECT relname FROM pg_class WHERE reltablegroup != 0;
 CREATE INDEX ON tgroup_test1(col2) TABLEGROUP tgroup1;
 CREATE TABLE tgroup_test3 (col1 int, col2 int) TABLEGROUP tgroup2;
@@ -34,13 +34,15 @@ CREATE TEMP TABLE tgroup_temp (col1 int, col2 int) TABLEGROUP tgroup1;
 --
 DROP TABLEGROUP tgroup3;
 -- These should fail.
+CREATE TABLE tgroup_test4 (col1 int, col2 int) TABLEGROUP tgroup3;
 DROP TABLEGROUP tgroup1;
 DROP TABLEGROUP bad_tgroupname;
 -- This drop should work now.
 DROP TABLE tgroup_test1;
 DROP TABLE tgroup_test2;
 DROP TABLEGROUP tgroup1;
-
+-- Create a tablegroup with the name of a dropped tablegroup.
+CREATE TABLEGROUP tgroup1; 
 --
 -- Interactions with colocated database.
 --

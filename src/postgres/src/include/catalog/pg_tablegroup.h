@@ -26,8 +26,7 @@
  *		typedef struct FormData_pg_tablegroup
  * ----------------
  */
-CATALOG(pg_tablegroup,9000,TableGroupRelationId)
-BKI_ROWTYPE_OID(8999, TablegroupRelation_Rowtype_Id) BKI_SCHEMA_MACRO
+CATALOG(pg_tablegroup,9000,TableGroupRelationId) BKI_ROWTYPE_OID(8999, TablegroupRelation_Rowtype_Id) BKI_SCHEMA_MACRO
 {
 	NameData	grpname;		/* tablegroup name */
 	Oid			grpowner;		/* owner of tablegroup */
