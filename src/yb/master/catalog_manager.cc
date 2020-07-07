@@ -4667,6 +4667,18 @@ Status CatalogManager::ProcessTabletReport(TSDescriptor* ts_desc,
   return Status::OK();
 }
 
+Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
+                                        CreateTablegroupResponsePB* resp,
+                                        rpc::RpcContext* rpc) {
+  return Status::OK();
+}
+
+Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
+                                        DeleteTablegroupResponsePB* resp,
+                                        rpc::RpcContext* rpc) {
+  return Status::OK();
+}
+
 Status CatalogManager::CreateNamespace(const CreateNamespaceRequestPB* req,
                                        CreateNamespaceResponsePB* resp,
                                        rpc::RpcContext* rpc) {

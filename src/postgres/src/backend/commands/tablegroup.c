@@ -74,6 +74,10 @@
 #include "utils/tqual.h"
 #include "utils/varlena.h"
 
+/*  YB includes. */
+#include "commands/ybccmds.h"
+#include "pg_yb_utils.h"
+
 /*
  * Create a table group.
  */
@@ -140,6 +144,11 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 	tablegroupoid = CatalogTupleInsert(rel, tuple);
 
 	heap_freetuple(tuple);
+
+	if (IsYugaByteEnabled())
+	{
+		YBCCreateTablegroup(tablegroupoid, stmt->tablegroupname);
+	}
 
 	/* We keep the lock on pg_tablegroup until commit */
 	heap_close(rel, NoLock);
@@ -232,6 +241,11 @@ DropTableGroup(DropTableGroupStmt *stmt)
 	CatalogTupleDelete(rel, tuple);
 
 	heap_endscan(scandesc);
+
+	if (IsYugaByteEnabled())
+	{
+		YBCDropTablegroup(tablegroupoid, stmt->tablegroupname);
+	}
 
 	/* We keep the lock on pg_tablegroup until commit */
 	heap_close(rel, NoLock);
