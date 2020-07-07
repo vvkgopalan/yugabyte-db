@@ -86,6 +86,17 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 	Oid			tablegroupoid;
 	Oid 		ownerId;
 
+	/* If not superuser check priveleges */
+	if (!superuser())
+	{
+		AclResult	aclresult;
+
+		aclresult = pg_namespace_aclcheck(MyDatabaseId, GetUserId(), ACL_CREATE);
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error(aclresult, OBJECT_DATABASE,
+						   get_namespace_name(MyDatabaseId));
+	}
+
 	if (MyDatabaseColocated)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -106,9 +117,7 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 		ownerId = GetUserId();
 
 	/*
-	 * Insert tuple into pg_tablegroup.  The purpose of doing this first is to
-	 * lock the proposed tablegroupname against other would-be creators. The
-	 * insertion will roll back if we find problems below.
+	 * Insert tuple into pg_tablegroup.
 	 */
 	rel = heap_open(TableGroupRelationId, RowExclusiveLock);
 
@@ -116,6 +125,9 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 
 	values[Anum_pg_tablegroup_grpname - 1] =
 		DirectFunctionCall1(namein, CStringGetDatum(stmt->tablegroupname));
+	values[Anum_pg_tablegroup_grpowner - 1] =
+		ObjectIdGetDatum(ownerId);
+	nulls[Anum_pg_tablegroup_grpacl - 1] = true;
 
 	/* Generate new proposed grpoptions (text array) */
 	/* For now no grpoptions. Will be part of Interleaved/Copartitioned */
@@ -175,6 +187,14 @@ DropTableGroup(DropTableGroupStmt *stmt)
 	}
 
 	tablegroupoid = HeapTupleGetOid(tuple);
+
+	/* If not superuser check ownership */
+	if (!superuser())
+	{
+		if (!pg_tablegroup_ownercheck(tablegroupoid, GetUserId()))
+			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLEGROUP,
+					       tablegroupname);
+	}
 
 	// Scan uses pg_class_tblgrp_index since pg_class can grow large
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
@@ -301,5 +321,88 @@ get_tablegroup_name(Oid grp_oid)
 	heap_close(rel, AccessShareLock);
 
 	return result;
+}
+
+/*
+ * RemoveTableGroupById -
+ *	 remove a tablegroup by its OID.  If a tablegroup does not exist with the provided
+ *	 oid, then an error is raised.
+ *
+ * grp_id - the oid of the tablegroup.
+ */
+void
+RemoveTableGroupById(Oid grp_id)
+{
+	Relation	pg_tblgrp_rel;
+	SysScanDesc sscan_class;
+	SysScanDesc sscan;
+	ScanKeyData skey[1];
+	ScanKeyData class_entry[1];
+	HeapTuple	tuple;
+	HeapTuple   class_tuple;
+	Relation	class_rel;
+
+	pg_tblgrp_rel = heap_open(TableGroupRelationId, RowExclusiveLock);
+
+	/*
+	 * Find the tablegroup to delete.
+	 */
+	ScanKeyInit(&skey[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(grp_id));
+
+	sscan = systable_beginscan(pg_tblgrp_rel, TablegroupOidIndexId, true,
+							   NULL, 1, skey);
+
+	tuple = systable_getnext(sscan);
+
+	/* If the tablegroup exists, then remove it, otherwise raise an error. */
+	if (!HeapTupleIsValid(tuple))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("tablegroup with oid %u does not exist",
+						grp_id)));
+	}
+
+	// Scan uses pg_class_tblgrp_index since pg_class can grow large
+	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
+	ScanKeyInit(&class_entry[0],
+				Anum_pg_class_reltablegroup,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(grp_id));
+	sscan_class = systable_beginscan(class_rel,
+							   ClassTblgrpIndexId,
+							   true,
+							   NULL,
+							   1,
+							   class_entry);
+	class_tuple = systable_getnext(sscan_class);
+	systable_endscan(sscan_class);
+	heap_close(class_rel, NoLock);
+	if (HeapTupleIsValid(class_tuple))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("tablegroup with oid %u is not empty",
+						grp_id)));
+		systable_endscan(sscan);
+		heap_close(pg_tblgrp_rel, NoLock);
+		return;
+	}
+
+	/* DROP hook for the tablegroup being removed */
+	InvokeObjectDropHook(TableGroupRelationId, grp_id, 0);
+
+	/*
+	 * Remove the pg_tablegroup tuple
+	 */
+	CatalogTupleDelete(pg_tblgrp_rel, tuple);
+
+	systable_endscan(sscan);
+
+	/* We keep the lock on pg_tablegroup until commit */
+	heap_close(pg_tblgrp_rel, NoLock);
 }
 

@@ -588,6 +588,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <ival>	opt_check_option
 
 %type <str>		OptTableGroup
+%type <rolespec> OptTableGroupOwner
 
 %type <splitopt> OptSplit SplitClause
 
@@ -4768,15 +4769,20 @@ opt_procedural:
  *
  *****************************************************************************/
 
- CreateTableGroupStmt: CREATE TABLEGROUP name opt_reloptions
+ CreateTableGroupStmt: CREATE TABLEGROUP name OptTableGroupOwner opt_reloptions
  				{
  					parser_ybc_beta_feature(@1, "tablegroup");
  					CreateTableGroupStmt *n = makeNode(CreateTableGroupStmt);
  					n->tablegroupname = $3;
- 					n->options = $4;
+ 					n->owner = $4;
+ 					n->options = $5;
  					$$ = (Node *) n;
  				}
  		;
+
+OptTableGroupOwner: OWNER RoleSpec		{ $$ = $2; }
+			| /*EMPTY */				{ $$ = NULL; }
+		;
 
 /*****************************************************************************
  *

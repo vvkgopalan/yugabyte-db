@@ -46,4 +46,6 @@ extern void DropTableGroup(DropTableGroupStmt *stmt);
 extern Oid	get_tablegroup_oid(const char *tablegroupname, bool missing_ok);
 extern char *get_tablegroup_name(Oid grp_oid);
 
+extern void RemoveTableGroupById(Oid grp_id);
+
 #endif							/* TABLEGROUP_H */
