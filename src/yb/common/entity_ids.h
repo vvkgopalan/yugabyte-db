@@ -34,6 +34,7 @@ using NamespaceId = std::string;
 using TableId = std::string;
 using UDTypeId = std::string;
 using CDCStreamId = std::string;
+using TablegroupId = std::string;
 
 using PeerId = std::string;
 using SnapshotId = std::string;

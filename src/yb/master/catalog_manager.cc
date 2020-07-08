@@ -2039,7 +2039,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   // columns into range partition columns. This is because postgres does not know that this index
   // table is in a colocated database. When we get to the "tablespaces" step where we store this
   // into PG metadata, then PG will know if db/table is colocated and do the work there.
-  if (colocated && PROTO_IS_INDEX(req)) {
+  if ((colocated || req.has_tablegroup_id()) && PROTO_IS_INDEX(req)) {
     for (auto& col_pb : *req.mutable_schema()->mutable_columns()) {
       col_pb.set_is_hash_key(false);
     }
@@ -2067,7 +2067,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     return CreateCopartitionedTable(req, resp, rpc, schema, ns);
   }
 
-  if (colocated) {
+  if (colocated || req.has_tablegroup_id()) {
     // If the table is colocated, then there should be no hash partition columns.
     if (schema.num_hash_key_columns() > 0) {
       Status s =
@@ -2118,7 +2118,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   // Create partitions.
   PartitionSchema partition_schema;
   vector<Partition> partitions;
-  if (colocated) {
+  if (colocated || req.has_tablegroup_id()) {
     RETURN_NOT_OK(partition_schema.CreatePartitions(1, &partitions));
     req.clear_partition_schema();
     req.set_num_tablets(1);
@@ -2211,6 +2211,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   scoped_refptr<TableInfo> table;
   vector<TabletInfo*> tablets;
   bool tablets_exist;
+  bool tablegroup_exists = false;
 
   {
     std::lock_guard<LockType> l(lock_);
@@ -2251,9 +2252,41 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
       return SetupError(resp->mutable_error(), NamespaceMasterError(ns->state()), s);
     }
 
+    if (req.has_tablegroup_id() &&
+        tablegroup_tablet_ids_map_.find(ns->id()) != tablegroup_tablet_ids_map_.end() &&
+        tablegroup_tablet_ids_map_[ns->id()].find(req.tablegroup_id()) !=
+            tablegroup_tablet_ids_map_[ns->id()].end()) {
+      tablegroup_exists = true;
+    }
+
+    // If using tablegroups, tablets_exist will always be false. 
     RETURN_NOT_OK(CreateTableInMemory(
-        req, schema, partition_schema, !tablets_exist /* create_tablets */, namespace_id,
-        partitions, &index_info, &tablets, resp, &table));
+        req, schema, partition_schema, !tablets_exist && !tablegroup_exists /* create_tablets */,
+        namespace_id, partitions, &index_info, &tablets, resp, &table));
+
+    if (req.has_tablegroup_id()) {
+      if (tablegroup_exists) {
+        scoped_refptr<TabletInfo> tablet = tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()];
+        DSCHECK(
+            tablet->colocated(), InternalError,
+            "The tablet for colocated database should be colocated.");
+        tablets.push_back(tablet.get());
+        auto tablet_lock = tablet->LockForWrite();
+        tablet_lock->mutable_data()->pb.add_table_ids(table->id());
+        RETURN_NOT_OK(sys_catalog_->UpdateItem(tablet.get(), leader_ready_term()));
+        tablet_lock->Commit();
+
+        tablet->mutable_metadata()->StartMutation();
+        table->AddTablets(tablets);
+      } else {
+        DSCHECK_EQ(
+            tablets.size(), 1, InternalError,
+            "Only one tablet should be created for each tablegroup");
+        tablets[0]->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
+        tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()] =
+            tablet_map_->find(tablets[0]->id())->second;
+      }
+    }
 
     if (colocated) {
       table->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
@@ -2291,7 +2324,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   // They will get committed at the end of this function.
   // Sanity check: the tables and tablets should all be in "preparing" state.
   CHECK_EQ(SysTablesEntryPB::PREPARING, table->metadata().dirty().pb.state());
-  if (tablets_exist) {
+  if (tablets_exist || tablegroup_exists) {
     TRACE("Inserted new table and updating tablet info into CatalogManager maps");
     VLOG(1) << "Inserted new table and updating tablet info into "
                "CatalogManager maps";
@@ -2351,7 +2384,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     tablet->mutable_metadata()->CommitMutation();
   }
 
-  if (colocated && tablets_exist) {
+  if ((colocated && tablets_exist) || (tablegroup_exists && req.has_tablegroup_id())){
     auto call =
         std::make_shared<AsyncAddTableToTablet>(master_, AsyncTaskPool(), tablets[0], table);
     table->AddTask(call);
@@ -4670,6 +4703,40 @@ Status CatalogManager::ProcessTabletReport(TSDescriptor* ts_desc,
 Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
                                         CreateTablegroupResponsePB* resp,
                                         rpc::RpcContext* rpc) {
+
+  CreateTableRequestPB ctreq;
+  CreateTableResponsePB ctresp;
+  // Use the tablegroup id as the prefix for the parent table id.
+  const auto parent_table_id = req->id() + kTablegroupParentTableIdSuffix;
+  const auto parent_table_name = req->id() + kTablegroupParentTableNameSuffix;
+  ctreq.set_name(parent_table_name);
+  ctreq.set_table_id(parent_table_id);
+  ctreq.mutable_namespace_()->set_name(req->namespace_name());
+  ctreq.mutable_namespace_()->set_id(req->namespace_id());
+  ctreq.set_table_type(PGSQL_TABLE_TYPE);
+  ctreq.set_tablegroup_id(req->id());
+
+  YBSchemaBuilder schemaBuilder;
+  schemaBuilder.AddColumn("parent_column")->Type(BINARY)->PrimaryKey()->NotNull();
+  YBSchema ybschema;
+  CHECK_OK(schemaBuilder.Build(&ybschema));
+  auto schema = yb::client::internal::GetSchema(ybschema);
+  SchemaToPB(schema, ctreq.mutable_schema());
+  ctreq.mutable_schema()->mutable_table_properties()->set_is_transactional(true);
+
+  // create a parent table, which will create the tablet.
+  Status s = CreateTable(&ctreq, &ctresp, rpc);
+  // We do not lock here so it is technically possible that the table was already created.
+  // If so, there is nothing to do so we just ignore the "AlreadyPresent" error.
+  if (!s.ok() && !s.IsAlreadyPresent()) {
+    return s;
+  }
+
+  SharedLock<LockType> catalog_lock(lock_);
+  TRACE("Acquired catalog manager lock");
+  TablegroupInfo *tg = new TablegroupInfo(req->id(), req->name(), req->namespace_name());
+  tablegroup_ids_map_[req->id()] = tg;
+
   return Status::OK();
 }
 

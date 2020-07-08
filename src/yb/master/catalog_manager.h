@@ -119,6 +119,8 @@ static const char* const kSecurityConfigType = "security-configuration";
 static const char* const kYsqlCatalogConfigType = "ysql-catalog-configuration";
 static const char* const kColocatedParentTableIdSuffix = ".colocated.parent.uuid";
 static const char* const kColocatedParentTableNameSuffix = ".colocated.parent.tablename";
+static const char* const kTablegroupParentTableIdSuffix = ".tablegroup.parent.uuid";
+static const char* const kTablegroupParentTableNameSuffix = ".tablegroup.parent.tablename";
 
 using PlacementId = std::string;
 
@@ -1238,6 +1240,12 @@ class CatalogManager : public tserver::TabletPeerLookupIf {
   // Tablet of colocated namespaces indexed by the namespace id.
   std::unordered_map<NamespaceId, scoped_refptr<TabletInfo>> colocated_tablet_ids_map_
       GUARDED_BY(lock_);
+
+  typedef std::unordered_map<TablegroupId, scoped_refptr<TabletInfo>> TablegroupTabletMap;
+
+  std::unordered_map<NamespaceId, TablegroupTabletMap> tablegroup_tablet_ids_map_ GUARDED_BY(lock_);
+
+  std::unordered_map<TablegroupId, scoped_refptr<TablegroupInfo>> tablegroup_ids_map_ GUARDED_BY(lock_);
 
   boost::optional<std::future<Status>> initdb_future_;
   boost::optional<InitialSysCatalogSnapshotWriter> initial_snapshot_writer_;

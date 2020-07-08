@@ -735,7 +735,6 @@ Status PgSession::CreateTablegroup(const string& database_name,
                                    GetPgsqlNamespaceId(database_oid),
                                    tablegroup_name,
                                    GetPgsqlTablegroupId(database_oid, tablegroup_oid));
-
 }
 
 Status PgSession::DropTablegroup(const string& tablegroup_name,

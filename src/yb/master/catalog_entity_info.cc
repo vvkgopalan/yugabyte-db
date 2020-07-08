@@ -628,6 +628,15 @@ string NamespaceInfo::ToString() const {
   return Substitute("$0 [id=$1]", name(), namespace_id_);
 }
 
+// ================================================================================================
+// TablegroupInfo
+// ================================================================================================
+
+TablegroupInfo::TablegroupInfo(TablegroupId tablegroup_id, NamespaceId ns_id,
+                               std::string tablegroup_name) :
+                               tablegroup_id_(tablegroup_id),
+                               ns_id_(ns_id),
+                               tablegroup_name_(tablegroup_name) {}
 
 // ================================================================================================
 // UDTypeInfo
