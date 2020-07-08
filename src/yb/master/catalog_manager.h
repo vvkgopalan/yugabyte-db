@@ -1250,9 +1250,11 @@ class CatalogManager : public tserver::TabletPeerLookupIf {
 
   typedef std::unordered_map<TablegroupId, scoped_refptr<TabletInfo>> TablegroupTabletMap;
 
-  std::unordered_map<NamespaceId, TablegroupTabletMap> tablegroup_tablet_ids_map_ GUARDED_BY(lock_);
+  std::unordered_map<NamespaceId, TablegroupTabletMap> tablegroup_tablet_ids_map_
+      GUARDED_BY(lock_);
 
-  std::unordered_map<TablegroupId, scoped_refptr<TablegroupInfo>> tablegroup_ids_map_ GUARDED_BY(lock_);
+  std::unordered_map<TablegroupId, scoped_refptr<TablegroupInfo>> tablegroup_ids_map_
+      GUARDED_BY(lock_);
 
   boost::optional<std::future<Status>> initdb_future_;
   boost::optional<InitialSysCatalogSnapshotWriter> initial_snapshot_writer_;
