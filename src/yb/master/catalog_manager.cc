@@ -2259,14 +2259,15 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
       tablegroup_exists = true;
     }
 
-    // If using tablegroups, tablets_exist will always be false. 
+    // If using tablegroups, tablets_exist will always be false.
     RETURN_NOT_OK(CreateTableInMemory(
         req, schema, partition_schema, !tablets_exist && !tablegroup_exists /* create_tablets */,
         namespace_id, partitions, &index_info, &tablets, resp, &table));
 
     if (req.has_tablegroup_id()) {
       if (tablegroup_exists) {
-        scoped_refptr<TabletInfo> tablet = tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()];
+        scoped_refptr<TabletInfo> tablet =
+            tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()];
         DSCHECK(
             tablet->colocated(), InternalError,
             "The tablet for colocated database should be colocated.");
@@ -2384,7 +2385,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     tablet->mutable_metadata()->CommitMutation();
   }
 
-  if ((colocated && tablets_exist) || (tablegroup_exists && req.has_tablegroup_id())){
+  if ((colocated && tablets_exist) || (tablegroup_exists && req.has_tablegroup_id())) {
     auto call =
         std::make_shared<AsyncAddTableToTablet>(master_, AsyncTaskPool(), tablets[0], table);
     table->AddTask(call);
@@ -4743,6 +4744,41 @@ Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
 Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
                                         DeleteTablegroupResponsePB* resp,
                                         rpc::RpcContext* rpc) {
+  DeleteTableRequestPB dtreq;
+  DeleteTableResponsePB dtresp;
+  // Use the tablegroup id as the prefix for the parent table id.
+  const auto parent_table_id = req->id() + kTablegroupParentTableIdSuffix;
+  const auto parent_table_name = req->id() + kTablegroupParentTableNameSuffix;
+
+  dtreq.mutable_table()->set_table_name(parent_table_name);
+  dtreq.mutable_table()->set_table_id(parent_table_id);
+
+  Status s = DeleteTable(&dtreq, &dtresp, rpc);
+
+  // Handle special cases based on resp.error().
+  if (dtresp.has_error()) {
+    // Not sure how to handle the case of multiple attempts - does this need to be done
+    // within client?
+    LOG_IF(DFATAL, s.ok()) << "Expecting error status if response has error: " <<
+        dtresp.error().code() << " Status: " << dtresp.error().status().ShortDebugString();
+    return StatusFromPB(dtresp.error().status());
+  } else {
+    // Check the status only if the response has no error.
+    RETURN_NOT_OK(s);
+  }
+
+  // Spin until the table is fully deleted, if requested. Move this to the client.
+  /*if (wait && dtresp.has_table_id()) {
+    RETURN_NOT_OK(WaitForDeleteTableToFinish(client, resp.table_id(), deadline));
+  }*/
+
+  // Perform map updates.
+  SharedLock<LockType> catalog_lock(lock_);
+  TRACE("Acquired catalog manager lock");
+  tablegroup_ids_map_.erase(req->id());
+  tablegroup_tablet_ids_map_[req->namespace_id()].erase(req->id());
+
+  LOG(INFO) << "Deleted table " << parent_table_name;
   return Status::OK();
 }
 
