@@ -238,6 +238,7 @@ message SysRowEntry {
     SYS_CONFIG = 9;
     CDC_STREAM = 10;
     UNIVERSE_REPLICATION = 11;
+    //TABLEGROUP = 12;
   }
 
   // The type of entry we are storing. Since the data is serialized, we cannot
@@ -415,6 +416,18 @@ message SysNamespaceEntryPB {
 
   optional State state = 5 [ default = UNKNOWN ];
 }
+
+// The data part of a SysRowEntry in the sys.catalog table for a tablegroup.
+/*message SysTablegroupEntryPB {
+  enum State {
+    ACTIVE = 0;
+    DELETING = 1;   // Delete Requested. Transitive State. Possible Next States: [DELETED].
+    DELETED = 2;    // Delete Finished on TServers or Tombstone. Final State before erasure.
+  }
+
+  optional bytes name = 1;
+  optional bytes namespace_id = 3;
+}*/
 
 // The data part of a SysRowEntry in the sys.catalog table for a User Defined Type.
 message SysUDTypeEntryPB {
@@ -867,6 +880,9 @@ message CreateTableRequestPB {
 
   // Is this a colocated table? This field is only applicable for a colocated database.
   optional bool colocated = 17 [ default = true ];
+
+  // This is only applicable for tablegroups. Eventually colocated will be deprecated.
+  optional bytes tablegroup_id = 19;
 }
 
 message CreateTableResponsePB {
