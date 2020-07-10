@@ -1,3 +1,4 @@
+
 /*-------------------------------------------------------------------------
  *
  * event_trigger.c
@@ -2358,7 +2359,7 @@ stringify_adefprivs_objtype(ObjectType objtype)
 		case OBJECT_STATISTIC_EXT:
 		case OBJECT_SUBSCRIPTION:
 		case OBJECT_TABCONSTRAINT:
-		case OBJECT_TABLEGROUP:
+		case OBJECT_TABLEGROUP: // TODO: support GRANT for TABLEGROUP
 		case OBJECT_TRANSFORM:
 		case OBJECT_TRIGGER:
 		case OBJECT_TSCONFIGURATION:

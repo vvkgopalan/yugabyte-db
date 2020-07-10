@@ -113,8 +113,8 @@ DECLARE_UNIQUE_INDEX(pg_class_relname_nsp_index, 2663, on pg_class using btree(r
 #define ClassNameNspIndexId  2663
 DECLARE_INDEX(pg_class_tblspc_relfilenode_index, 3455, on pg_class using btree(reltablespace oid_ops, relfilenode oid_ops));
 #define ClassTblspcRelfilenodeIndexId  3455
-DECLARE_INDEX(pg_class_tblgrp_index, 9004, on pg_class using btree(reltablegroup oid_ops));
-#define ClassTblgrpIndexId  9004
+DECLARE_INDEX(pg_class_tblgrp_index, 9002, on pg_class using btree(reltablegroup oid_ops));
+#define ClassTblgrpIndexId  9002
 
 DECLARE_UNIQUE_INDEX(pg_collation_name_enc_nsp_index, 3164, on pg_collation using btree(collname name_ops, collencoding int4_ops, collnamespace oid_ops));
 #define CollationNameEncNspIndexId 3164

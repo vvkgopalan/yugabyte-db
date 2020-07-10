@@ -430,13 +430,12 @@ YBCCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, O
 
 		if (strcmp(def->defname, "colocated") == 0)
 		{
-			bool colocated_relopt = defGetBoolean(def);
-
 			if (stmt->tablegroupname)
 				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot set colocated false with tablegroup")));
+							  (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 		 errmsg("cannot use \'colocated=true/false\' with tablegroup")));
 
+			bool colocated_relopt = defGetBoolean(def);
 			if (MyDatabaseColocated)
 				colocated = colocated_relopt;
 			else if (colocated_relopt)

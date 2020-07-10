@@ -29,11 +29,11 @@
 CATALOG(pg_tablegroup,9000,TableGroupRelationId) BKI_ROWTYPE_OID(8999, TablegroupRelation_Rowtype_Id) BKI_SCHEMA_MACRO
 {
 	NameData	grpname;		/* tablegroup name */
-	Oid			grpowner;		/* owner of tablegroup */
+	Oid				grpowner;		/* owner of tablegroup */
 
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	aclitem		grpacl[1];		/* access permissions */
-	text		grpoptions[1];	/* per-tablegroup options */
+	text			grpoptions[1];	/* per-tablegroup options */
 #endif
 } FormData_pg_tablegroup;
 

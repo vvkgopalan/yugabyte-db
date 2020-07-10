@@ -645,9 +645,9 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	if (stmt->tablegroupname)
 	{
 		if (MyDatabaseColocated)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot use tablegroups in a colocated database")));
+				ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 			 errmsg("cannot use tablegroups in a colocated database")));
 		else
 			tablegroupId = get_tablegroup_oid(stmt->tablegroupname, false);
 	}
@@ -661,11 +661,10 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	{
 		AclResult	aclresult;
 
-		aclresult = pg_tablegroup_aclcheck(tablegroupId, GetUserId(),
-										   ACL_CREATE);
+		aclresult = pg_tablegroup_aclcheck(tablegroupId, GetUserId(), ACL_CREATE);
 		if (aclresult != ACLCHECK_OK)
-			aclcheck_error(aclresult, OBJECT_TABLEGROUP,
-						   get_tablegroup_name(tablegroupId));
+				aclcheck_error(aclresult, OBJECT_TABLEGROUP,
+						   			 	 get_tablegroup_name(tablegroupId));
 	}
 
 	/* Identify user ID that will own the table */

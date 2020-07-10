@@ -587,7 +587,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <rolespec> OptTableSpaceOwner
 %type <ival>	opt_check_option
 
-%type <str>		OptTableGroup
+%type <str>	OptTableGroup
 %type <rolespec> OptTableGroupOwner
 
 %type <splitopt> OptSplit SplitClause
@@ -4764,7 +4764,7 @@ opt_procedural:
  *
  *		QUERY:
  *             CREATE TABLEGROUP tablegroup
- * 		
+ *
  *		TODO: Later extend this to include COPARTITIONED and INTERLEAVED
  *
  *****************************************************************************/

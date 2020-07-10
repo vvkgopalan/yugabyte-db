@@ -6,53 +6,53 @@
 --
 \d pg_tablegroup
             Table "pg_catalog.pg_tablegroup"
-   Column   |   Type    | Collation | Nullable | Default 
+   Column   |   Type    | Collation | Nullable | Default
 ------------+-----------+-----------+----------+---------
- grpname    | name      |           | not null | 
- grpowner   | oid       |           | not null | 
- grpacl     | aclitem[] |           |          | 
- grpoptions | text[]    |           |          | 
+ grpname    | name      |           | not null |
+ grpowner   | oid       |           | not null |
+ grpacl     | aclitem[] |           |          |
+ grpoptions | text[]    |           |          |
 Indexes:
     "pg_tablegroup_oid_index" PRIMARY KEY, lsm (oid)
 
 \d pg_class
                      Table "pg_catalog.pg_class"
-       Column        |     Type     | Collation | Nullable | Default 
+       Column        |     Type     | Collation | Nullable | Default
 ---------------------+--------------+-----------+----------+---------
- relname             | name         |           | not null | 
- relnamespace        | oid          |           | not null | 
- reltype             | oid          |           | not null | 
- reloftype           | oid          |           | not null | 
- relowner            | oid          |           | not null | 
- relam               | oid          |           | not null | 
- relfilenode         | oid          |           | not null | 
- reltablespace       | oid          |           | not null | 
- relpages            | integer      |           | not null | 
- reltuples           | real         |           | not null | 
- relallvisible       | integer      |           | not null | 
- reltoastrelid       | oid          |           | not null | 
- relhasindex         | boolean      |           | not null | 
- relisshared         | boolean      |           | not null | 
- relpersistence      | "char"       |           | not null | 
- relkind             | "char"       |           | not null | 
- relnatts            | smallint     |           | not null | 
- relchecks           | smallint     |           | not null | 
- relhasoids          | boolean      |           | not null | 
- relhasrules         | boolean      |           | not null | 
- relhastriggers      | boolean      |           | not null | 
- relhassubclass      | boolean      |           | not null | 
- relrowsecurity      | boolean      |           | not null | 
- relforcerowsecurity | boolean      |           | not null | 
- relispopulated      | boolean      |           | not null | 
- relreplident        | "char"       |           | not null | 
- relispartition      | boolean      |           | not null | 
- relrewrite          | oid          |           | not null | 
- relfrozenxid        | xid          |           | not null | 
- relminmxid          | xid          |           | not null | 
- reltablegroup       | oid          |           | not null | 
- relacl              | aclitem[]    |           |          | 
- reloptions          | text[]       |           |          | 
- relpartbound        | pg_node_tree |           |          | 
+ relname             | name         |           | not null |
+ relnamespace        | oid          |           | not null |
+ reltype             | oid          |           | not null |
+ reloftype           | oid          |           | not null |
+ relowner            | oid          |           | not null |
+ relam               | oid          |           | not null |
+ relfilenode         | oid          |           | not null |
+ reltablespace       | oid          |           | not null |
+ relpages            | integer      |           | not null |
+ reltuples           | real         |           | not null |
+ relallvisible       | integer      |           | not null |
+ reltoastrelid       | oid          |           | not null |
+ relhasindex         | boolean      |           | not null |
+ relisshared         | boolean      |           | not null |
+ relpersistence      | "char"       |           | not null |
+ relkind             | "char"       |           | not null |
+ relnatts            | smallint     |           | not null |
+ relchecks           | smallint     |           | not null |
+ relhasoids          | boolean      |           | not null |
+ relhasrules         | boolean      |           | not null |
+ relhastriggers      | boolean      |           | not null |
+ relhassubclass      | boolean      |           | not null |
+ relrowsecurity      | boolean      |           | not null |
+ relforcerowsecurity | boolean      |           | not null |
+ relispopulated      | boolean      |           | not null |
+ relreplident        | "char"       |           | not null |
+ relispartition      | boolean      |           | not null |
+ relrewrite          | oid          |           | not null |
+ relfrozenxid        | xid          |           | not null |
+ relminmxid          | xid          |           | not null |
+ reltablegroup       | oid          |           | not null |
+ relacl              | aclitem[]    |           |          |
+ reloptions          | text[]       |           |          |
+ relpartbound        | pg_node_tree |           |          |
 Indexes:
     "pg_class_oid_index" PRIMARY KEY, lsm (oid)
     "pg_class_relname_nsp_index" UNIQUE, lsm (relname, relnamespace)
@@ -68,7 +68,7 @@ CREATE TABLEGROUP tgroup3;
 CREATE TABLE tgroup_test1 (col1 int, col2 int) TABLEGROUP tgroup1;
 CREATE TABLE tgroup_test2 (col1 int, col2 int) TABLEGROUP tgroup1;
 SELECT grpname FROM pg_tablegroup;
- grpname 
+ grpname
 ---------
  tgroup1
  tgroup2
@@ -76,23 +76,23 @@ SELECT grpname FROM pg_tablegroup;
 (3 rows)
 
 SELECT relname FROM pg_class WHERE reltablegroup != 0;
-   relname    
+   relname
 --------------
- tgroup_test1 
- tgroup_test2 
+ tgroup_test1
+ tgroup_test2
 (2 rows)
 
-CREATE INDEX ON tgroup_test1(col2) TABLEGROUP tgroup1;
+CREATE INDEX ON tgroup_test1(col2);
 CREATE TABLE tgroup_test3 (col1 int, col2 int) TABLEGROUP tgroup2;
 SELECT relname, relhasindex
     FROM pg_tablegroup, pg_class
     WHERE pg_tablegroup.oid = pg_class.reltablegroup;
-        relname        | relhasindex 
+        relname        | relhasindex
 -----------------------+-------------
- tgroup_test1          | t           
- tgroup_test2          | f           
- tgroup_test1_col2_idx | f           
- tgroup_test3          | f           
+ tgroup_test1          | t
+ tgroup_test2          | f
+ tgroup_test1_col2_idx | f
+ tgroup_test3          | f
 (4 rows)
 
 -- These should fail.
@@ -101,7 +101,9 @@ ERROR:  tablegroup "tgroup1" already exists
 CREATE TABLE tgroup_test (col1 int, col2 int) TABLEGROUP bad_tgroupname;
 ERROR:  tablegroup "bad_tgroupname" does not exist
 CREATE TABLE tgroup_optout (col1 int, col2 int) WITH (colocated=false) TABLEGROUP tgroup1;
-ERROR:  cannot set colocated false with tablegroup
+ERROR:  cannot use 'colocated=true/false' with tablegroup
+CREATE TABLE tgroup_optout (col1 int, col2 int) WITH (colocated=true) TABLEGROUP tgroup1;
+ERROR:  cannot use 'colocated=true/false' with tablegroup
 CREATE TABLE tgroup_optout (col1 int, col2 int) WITH (colocated=false) TABLEGROUP bad_tgroupname;
 ERROR:  tablegroup "bad_tgroupname" does not exist
 CREATE TEMP TABLE tgroup_temp (col1 int, col2 int) TABLEGROUP tgroup1;
@@ -110,7 +112,7 @@ ERROR:  Cannot use TABLEGROUP with TEMP table.
 -- DROP TABLEGROUP
 --
 DROP TABLEGROUP tgroup3;
--- These should fail.
+-- These should fail. CREATE TABLE is to check that the row entry was deleted from pg_tablegroup.
 CREATE TABLE tgroup_test4 (col1 int, col2 int) TABLEGROUP tgroup3;
 ERROR:  tablegroup "tgroup3" does not exist
 DROP TABLEGROUP tgroup1;
@@ -122,7 +124,7 @@ DROP TABLE tgroup_test1;
 DROP TABLE tgroup_test2;
 DROP TABLEGROUP tgroup1;
 -- Create a tablegroup with the name of a dropped tablegroup.
-CREATE TABLEGROUP tgroup1; 
+CREATE TABLEGROUP tgroup1;
 --
 -- Interactions with colocated database.
 --

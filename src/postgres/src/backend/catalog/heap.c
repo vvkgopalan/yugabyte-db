@@ -262,7 +262,7 @@ heap_create(const char *relname,
 			bool shared_relation,
 			bool mapped_relation,
 			bool allow_system_table_mods,
-			Oid reltablegroup)
+			Oid  reltablegroup)
 {
 	bool		create_storage;
 	Relation	rel;
