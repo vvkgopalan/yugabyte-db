@@ -344,7 +344,7 @@ DefineIndex(Oid relationId,
 	Oid			accessMethodId;
 	Oid			namespaceId;
 	Oid			tablespaceId;
-	Oid 		tableGroupId;
+	Oid         tableGroupId;
 	Oid			createdConstraintId = InvalidOid;
 	List	   *indexColNames;
 	List	   *allIndexParams;

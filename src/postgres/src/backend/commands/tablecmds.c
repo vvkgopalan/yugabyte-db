@@ -550,7 +550,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	Oid			namespaceId;
 	Oid			relationId = InvalidOid;
 	Oid			tablespaceId;
-	Oid 		tablegroupId;
+	Oid         tablegroupId;
 	Relation	rel;
 	TupleDesc	descriptor;
 	List	   *inheritOids;
