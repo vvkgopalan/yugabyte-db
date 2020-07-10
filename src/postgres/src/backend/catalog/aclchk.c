@@ -3456,7 +3456,7 @@ aclcheck_error(AclResult aclerr, ObjectType objtype,
 						break;
 					case OBJECT_TABLEGROUP:
 						msg = gettext_noop("permission denied for tablegroup %s");
-						break;	
+						break;
 					case OBJECT_TABLESPACE:
 						msg = gettext_noop("permission denied for tablespace %s");
 						break;
@@ -4261,37 +4261,36 @@ pg_namespace_aclmask(Oid nsp_oid, Oid roleid,
 }
 
 /*
- * Exported routine for examining a user's privileges for a tablespace
+ * Exported routine for examining a user's privileges for a tablegroup
  */
 AclMode
 pg_tablegroup_aclmask(Oid grp_oid, Oid roleid,
-					  AclMode mask, AclMaskHow how)
+											AclMode mask, AclMaskHow how)
 {
 	AclMode		result;
 	HeapTuple	tuple;
-	Datum		aclDatum;
-	bool		isNull;
+	Datum			aclDatum;
+	bool			isNull;
 	Acl		   *acl;
-	Oid			ownerId;
+	Oid				ownerId;
 
 	/* Superusers bypass all permission checking. */
 	if (superuser_arg(roleid))
 		return mask;
 
 	/*
-	 * Get the tablespace's ACL from pg_tablespace
+	 * Get the tablegroup's ACL from pg_tablegroup
 	 */
 	tuple = SearchSysCache1(TABLEGROUPOID, ObjectIdGetDatum(grp_oid));
 	if (!HeapTupleIsValid(tuple))
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("tablegroup with OID %u does not exist", grp_oid)));
+			ereport(ERROR,
+							(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 			 errmsg("tablegroup with OID %u does not exist", grp_oid)));
 
 	ownerId = ((Form_pg_tablegroup) GETSTRUCT(tuple))->grpowner;
 
 	aclDatum = SysCacheGetAttr(TABLEGROUPOID, tuple,
-							   Anum_pg_tablegroup_grpacl,
-							   &isNull);
+							   						 Anum_pg_tablegroup_grpacl, &isNull);
 
 	if (isNull)
 	{
@@ -4774,7 +4773,7 @@ pg_namespace_aclcheck(Oid nsp_oid, Oid roleid, AclMode mode)
 AclResult
 pg_tablegroup_aclcheck(Oid grp_oid, Oid roleid, AclMode mode)
 {
-	if (pg_tablespace_aclmask(grp_oid, roleid, mode, ACLMASK_ANY) != 0)
+	if (pg_tablegroup_aclmask(grp_oid, roleid, mode, ACLMASK_ANY) != 0)
 		return ACLCHECK_OK;
 	else
 		return ACLCHECK_NO_PRIV;
@@ -5039,7 +5038,7 @@ bool
 pg_tablegroup_ownercheck(Oid grp_oid, Oid roleid)
 {
 	HeapTuple	grptuple;
-	Oid			grpowner;
+	Oid				grpowner;
 
 	/* Superusers bypass all permission checking. */
 	if (superuser_arg(roleid))
@@ -5048,9 +5047,9 @@ pg_tablegroup_ownercheck(Oid grp_oid, Oid roleid)
 	/* Search syscache for pg_tablegroup */
 	grptuple = SearchSysCache1(TABLEGROUPOID, ObjectIdGetDatum(grp_oid));
 	if (!HeapTupleIsValid(grptuple))
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("tablegroup with OID %u does not exist", grp_oid)));
+			ereport(ERROR,
+							(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 			 errmsg("tablegroup with OID %u does not exist", grp_oid)));
 
 	grpowner = ((Form_pg_tablegroup) GETSTRUCT(grptuple))->grpowner;
 

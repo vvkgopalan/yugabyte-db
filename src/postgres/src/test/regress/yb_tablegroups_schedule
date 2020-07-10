@@ -7,3 +7,4 @@
 # - (Future) ALTER
 ####################################################################################################
 test: yb_tablegroup
+test: yb_tablegroup_permissions

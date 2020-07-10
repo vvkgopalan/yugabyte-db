@@ -1,6 +1,6 @@
 // tablegroup.c
-//	  Commands to manipulate table groups
-// TODO: add description
+//	  Commands to manipulate table groups.
+//	  Tablegroups are used to create colocation groups for tables.
 //
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
@@ -57,6 +57,7 @@
 #include "commands/seclabel.h"
 #include "commands/tablecmds.h"
 #include "commands/tablegroup.h"
+#include "commands/dbcommands.h"
 #include "common/file_perm.h"
 #include "miscadmin.h"
 #include "postmaster/bgwriter.h"
@@ -74,27 +75,28 @@
 #include "utils/varlena.h"
 
 /*
- * Create a table group
+ * Create a table group.
  */
 Oid
 CreateTableGroup(CreateTableGroupStmt *stmt)
 {
 	Relation	rel;
-	Datum		values[Natts_pg_tablegroup];
-	bool		nulls[Natts_pg_tablegroup];
+	Datum			values[Natts_pg_tablegroup];
+	bool			nulls[Natts_pg_tablegroup];
 	HeapTuple	tuple;
-	Oid			tablegroupoid;
-	Oid 		ownerId;
+	Oid				tablegroupoid;
+	Oid 			ownerId;
 
-	/* If not superuser check priveleges */
+	/* If not superuser check privileges */
 	if (!superuser())
 	{
 		AclResult	aclresult;
-
-		aclresult = pg_namespace_aclcheck(MyDatabaseId, GetUserId(), ACL_CREATE);
+		// Check that user has create privs on the database to allow creation
+		// of a new tablegroup.
+		aclresult = pg_database_aclcheck(MyDatabaseId, GetUserId(), ACL_CREATE);
 		if (aclresult != ACLCHECK_OK)
-			aclcheck_error(aclresult, OBJECT_DATABASE,
-						   get_namespace_name(MyDatabaseId));
+				aclcheck_error(aclresult, OBJECT_DATABASE,
+						   				 get_database_name(MyDatabaseId));
 	}
 
 	if (MyDatabaseColocated)
@@ -106,10 +108,10 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 	 * Check that there is no other tablegroup by this name.
 	 */
 	if (OidIsValid(get_tablegroup_oid(stmt->tablegroupname, true)))
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("tablegroup \"%s\" already exists",
-						stmt->tablegroupname)));
+			ereport(ERROR,
+							(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 			 errmsg("tablegroup \"%s\" already exists",
+											stmt->tablegroupname)));
 
 	if (stmt->owner)
 		ownerId = get_rolespec_oid(stmt->owner, false);
@@ -125,13 +127,12 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 
 	values[Anum_pg_tablegroup_grpname - 1] =
 		DirectFunctionCall1(namein, CStringGetDatum(stmt->tablegroupname));
-	values[Anum_pg_tablegroup_grpowner - 1] =
-		ObjectIdGetDatum(ownerId);
+	values[Anum_pg_tablegroup_grpowner - 1] = ObjectIdGetDatum(ownerId);
 	nulls[Anum_pg_tablegroup_grpacl - 1] = true;
 
 	/* Generate new proposed grpoptions (text array) */
 	/* For now no grpoptions. Will be part of Interleaved/Copartitioned */
-	
+
 	nulls[Anum_pg_tablegroup_grpoptions - 1] = true;
 
 	tuple = heap_form_tuple(rel->rd_att, values, nulls);
@@ -148,22 +149,20 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 
 /*
  * Drop a tablegroup
- *
- * Permissions? Must be owner?
  */
 void
 DropTableGroup(DropTableGroupStmt *stmt)
 {
-	char	   *tablegroupname = stmt->tablegroupname;
+	char *tablegroupname = stmt->tablegroupname;
 	HeapScanDesc scandesc;
-	SysScanDesc class_scandesc;
-	Relation	rel;
-	Relation 	class_rel;
-	HeapTuple	tuple;
-	HeapTuple 	class_tuple;
-	ScanKeyData entry[1];
-	ScanKeyData class_entry[1];
-	Oid			tablegroupoid;
+	SysScanDesc  class_scandesc;
+	Relation		 rel;
+	Relation 		 class_rel;
+	HeapTuple		 tuple;
+	HeapTuple 	 class_tuple;
+	ScanKeyData  entry[1];
+	ScanKeyData  class_entry[1];
+	Oid					 tablegroupoid;
 
 	/*
 	 * Find the target tuple
@@ -171,18 +170,18 @@ DropTableGroup(DropTableGroupStmt *stmt)
 	rel = heap_open(TableGroupRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&entry[0],
-				Anum_pg_tablegroup_grpname,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(tablegroupname));
+						  Anum_pg_tablegroup_grpname,
+						  BTEqualStrategyNumber, F_NAMEEQ,
+						  CStringGetDatum(tablegroupname));
 	scandesc = heap_beginscan_catalog(rel, 1, entry);
 	tuple = heap_getnext(scandesc, ForwardScanDirection);
 
 	if (!HeapTupleIsValid(tuple))
 	{
 		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("tablegroup \"%s\" does not exist",
-						tablegroupname)));
+					  (errcode(ERRCODE_UNDEFINED_OBJECT),
+				 		 errmsg("tablegroup \"%s\" does not exist",
+										tablegroupname)));
 		return;
 	}
 
@@ -192,31 +191,33 @@ DropTableGroup(DropTableGroupStmt *stmt)
 	if (!superuser())
 	{
 		if (!pg_tablegroup_ownercheck(tablegroupoid, GetUserId()))
-			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLEGROUP,
-					       tablegroupname);
+			aclcheck_error(ACLCHECK_NOT_OWNER,
+										 OBJECT_TABLEGROUP,
+										 tablegroupname);
 	}
 
 	// Scan uses pg_class_tblgrp_index since pg_class can grow large
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
 	ScanKeyInit(&class_entry[0],
-				Anum_pg_class_reltablegroup,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(tablegroupoid));
+							Anum_pg_class_reltablegroup,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(tablegroupoid));
 	class_scandesc = systable_beginscan(class_rel,
-									    ClassTblgrpIndexId,
-									    true,
-									    NULL,
-									    1,
-									    class_entry);
+									    								ClassTblgrpIndexId,
+									    								true,
+									    								NULL,
+									    								1,
+									    								class_entry);
 	class_tuple = systable_getnext(class_scandesc);
 	systable_endscan(class_scandesc);
 	heap_close(class_rel, NoLock);
+
 	if (HeapTupleIsValid(class_tuple))
 	{
 		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("tablegroup \"%s\" is not empty",
-						tablegroupname)));
+						(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 		 errmsg("tablegroup \"%s\" is not empty",
+										tablegroupname)));
 		heap_endscan(scandesc);
 		heap_close(rel, NoLock);
 		return;
@@ -245,11 +246,11 @@ DropTableGroup(DropTableGroupStmt *stmt)
 Oid
 get_tablegroup_oid(const char *tablegroupname, bool missing_ok)
 {
-	Oid			result;
-	Relation	rel;
+	Oid					 result;
+	Relation		 rel;
 	HeapScanDesc scandesc;
-	HeapTuple	tuple;
-	ScanKeyData entry[1];
+	HeapTuple		 tuple;
+	ScanKeyData  entry[1];
 
 	/*
 	 * Search pg_tablegroup.  We use a heapscan here even though there is an
@@ -259,9 +260,9 @@ get_tablegroup_oid(const char *tablegroupname, bool missing_ok)
 	rel = heap_open(TableGroupRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
-				Anum_pg_tablegroup_grpname,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(tablegroupname));
+						  Anum_pg_tablegroup_grpname,
+							BTEqualStrategyNumber, F_NAMEEQ,
+							CStringGetDatum(tablegroupname));
 	scandesc = heap_beginscan_catalog(rel, 1, entry);
 	tuple = heap_getnext(scandesc, ForwardScanDirection);
 
@@ -276,9 +277,47 @@ get_tablegroup_oid(const char *tablegroupname, bool missing_ok)
 
 	if (!OidIsValid(result) && !missing_ok)
 		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("tablegroup \"%s\" does not exist",
-						tablegroupname)));
+						(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 		 errmsg("tablegroup \"%s\" does not exist",
+										tablegroupname)));
+
+	return result;
+}
+
+/*
+ * get_table_tablegroup_oid - given a table oid, look up its tablegroup oid (if any)
+ */
+Oid
+get_table_tablegroup_oid(Oid table_oid)
+{
+	Oid					result;
+	Relation		rel;
+	SysScanDesc scandesc;
+	HeapTuple		tuple;
+	ScanKeyData entry[1];
+
+	/*
+	 * Search pg_class using an indexed lookup as pg_class can grow large.
+	 * Using pg_class_oid_index
+	 */
+
+	rel = heap_open(RelationRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+						  ObjectIdAttributeNumber,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(table_oid));
+	scandesc = systable_beginscan(rel, ClassOidIndexId, true,
+							      						NULL, 1, entry);
+	tuple = systable_getnext(scandesc);
+	systable_endscan(scandesc);
+	heap_close(rel, NoLock);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		result = ((Form_pg_class) GETSTRUCT(tuple))->reltablegroup;
+	else
+		result = InvalidOid;
 
 	return result;
 }
@@ -291,11 +330,11 @@ get_tablegroup_oid(const char *tablegroupname, bool missing_ok)
 char *
 get_tablegroup_name(Oid grp_oid)
 {
-	char	   *result;
-	Relation	rel;
+	char	   		*result;
+	Relation		 rel;
 	HeapScanDesc scandesc;
-	HeapTuple	tuple;
-	ScanKeyData entry[1];
+	HeapTuple		 tuple;
+	ScanKeyData  entry[1];
 
 	/*
 	 * Search pg_tablegroup.  We use a heapscan here even though there is an
@@ -305,9 +344,9 @@ get_tablegroup_name(Oid grp_oid)
 	rel = heap_open(TableGroupRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
-				ObjectIdAttributeNumber,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(grp_oid));
+							ObjectIdAttributeNumber,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(grp_oid));
 	scandesc = heap_beginscan_catalog(rel, 1, entry);
 	tuple = heap_getnext(scandesc, ForwardScanDirection);
 
@@ -328,19 +367,19 @@ get_tablegroup_name(Oid grp_oid)
  *	 remove a tablegroup by its OID.  If a tablegroup does not exist with the provided
  *	 oid, then an error is raised.
  *
- * grp_id - the oid of the tablegroup.
+ * grp_oid - the oid of the tablegroup.
  */
 void
-RemoveTableGroupById(Oid grp_id)
+RemoveTableGroupById(Oid grp_oid)
 {
-	Relation	pg_tblgrp_rel;
-	SysScanDesc sscan_class;
-	SysScanDesc sscan;
-	ScanKeyData skey[1];
-	ScanKeyData class_entry[1];
-	HeapTuple	tuple;
-	HeapTuple   class_tuple;
-	Relation	class_rel;
+	Relation		 pg_tblgrp_rel;
+	SysScanDesc  sscan_class;
+	HeapScanDesc scandesc;
+	ScanKeyData  skey[1];
+	ScanKeyData  class_entry[1];
+	HeapTuple		 tuple;
+	HeapTuple    class_tuple;
+	Relation		 class_rel;
 
 	pg_tblgrp_rel = heap_open(TableGroupRelationId, RowExclusiveLock);
 
@@ -348,59 +387,53 @@ RemoveTableGroupById(Oid grp_id)
 	 * Find the tablegroup to delete.
 	 */
 	ScanKeyInit(&skey[0],
-				ObjectIdAttributeNumber,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(grp_id));
-
-	sscan = systable_beginscan(pg_tblgrp_rel, TablegroupOidIndexId, true,
-							   NULL, 1, skey);
-
-	tuple = systable_getnext(sscan);
+							ObjectIdAttributeNumber,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(grp_oid));
+	scandesc = heap_beginscan_catalog(pg_tblgrp_rel, 1, skey);
+	tuple = heap_getnext(scandesc, ForwardScanDirection);
 
 	/* If the tablegroup exists, then remove it, otherwise raise an error. */
 	if (!HeapTupleIsValid(tuple))
 	{
 		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("tablegroup with oid %u does not exist",
-						grp_id)));
+						(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 		 errmsg("tablegroup with oid %u does not exist",
+										grp_oid)));
 	}
 
 	// Scan uses pg_class_tblgrp_index since pg_class can grow large
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
 	ScanKeyInit(&class_entry[0],
-				Anum_pg_class_reltablegroup,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(grp_id));
-	sscan_class = systable_beginscan(class_rel,
-							   ClassTblgrpIndexId,
-							   true,
-							   NULL,
-							   1,
-							   class_entry);
+							Anum_pg_class_reltablegroup,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(grp_oid));
+	sscan_class = systable_beginscan(class_rel, ClassTblgrpIndexId, true,
+								     							 NULL, 1, class_entry);
 	class_tuple = systable_getnext(sscan_class);
 	systable_endscan(sscan_class);
 	heap_close(class_rel, NoLock);
+
 	if (HeapTupleIsValid(class_tuple))
 	{
 		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("tablegroup with oid %u is not empty",
-						grp_id)));
-		systable_endscan(sscan);
+						(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 		 errmsg("tablegroup with oid %u is not empty",
+										grp_oid)));
+		heap_endscan(scandesc);
 		heap_close(pg_tblgrp_rel, NoLock);
 		return;
 	}
 
 	/* DROP hook for the tablegroup being removed */
-	InvokeObjectDropHook(TableGroupRelationId, grp_id, 0);
+	InvokeObjectDropHook(TableGroupRelationId, grp_oid, 0);
 
 	/*
 	 * Remove the pg_tablegroup tuple
 	 */
 	CatalogTupleDelete(pg_tblgrp_rel, tuple);
 
-	systable_endscan(sscan);
+	heap_endscan(scandesc);
 
 	/* We keep the lock on pg_tablegroup until commit */
 	heap_close(pg_tblgrp_rel, NoLock);

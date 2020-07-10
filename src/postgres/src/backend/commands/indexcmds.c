@@ -572,7 +572,7 @@ DefineIndex(Oid relationId,
 	}
 	else
 	{
-		tableGroupId = InvalidOid;
+		tableGroupId = get_table_tablegroup_oid(relationId);
 	}
 
 	/* Check tablespace permissions */
