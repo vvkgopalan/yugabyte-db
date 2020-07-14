@@ -535,9 +535,7 @@ class TablegroupInfo : public RefCountedThreadSafe<TablegroupInfo>{
                           std::string tablegroup_name);
 
   const std::string& id() const { return tablegroup_id_; }
-
   const std::string& ns_id() const { return ns_id_; }
-
   const std::string& name() const { return tablegroup_name_; }
 
  private:

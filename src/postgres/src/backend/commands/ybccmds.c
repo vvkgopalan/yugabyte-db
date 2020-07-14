@@ -36,6 +36,7 @@
 #include "catalog/ybctype.h"
 #include "commands/dbcommands.h"
 #include "commands/ybccmds.h"
+#include "commands/tablegroup.h"
 
 #include "access/htup_details.h"
 #include "utils/lsyscache.h"
@@ -403,7 +404,8 @@ static void CreateTableHandleSplitOptions(YBCPgStatement handle,
 }
 
 void
-YBCCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, Oid namespaceId)
+YBCCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId,
+							 Oid namespaceId, Oid tablegroupId)
 {
 	if (relkind != RELKIND_RELATION)
 	{
@@ -482,6 +484,7 @@ YBCCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, O
 									   false, /* if_not_exists */
 									   primary_key == NULL /* add_primary_key */,
 									   colocated,
+									   tablegroupId,
 									   &handle));
 
 	CreateTableAddColumns(handle, desc, primary_key, colocated);
@@ -708,7 +711,8 @@ YBCCreateIndex(const char *indexName,
 			   Oid indexId,
 			   Relation rel,
 			   OptSplit *split_options,
-			   const bool skip_index_backfill)
+			   const bool skip_index_backfill,
+			   Oid tablegroupId)
 {
 	char *db_name	  = get_database_name(MyDatabaseId);
 	char *schema_name = get_namespace_name(RelationGetNamespace(rel));
@@ -746,6 +750,7 @@ YBCCreateIndex(const char *indexName,
 									   indexInfo->ii_Unique,
 									   skip_index_backfill,
 									   false, /* if_not_exists */
+									   tablegroupId,
 									   &handle));
 
 	for (int i = 0; i < indexTupleDesc->natts; i++)

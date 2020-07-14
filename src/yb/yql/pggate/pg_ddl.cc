@@ -156,7 +156,8 @@ PgCreateTable::PgCreateTable(PgSession::ScopedRefPtr pg_session,
                              bool is_shared_table,
                              bool if_not_exist,
                              bool add_primary_key,
-                             const bool colocated)
+                             const bool colocated,
+                             const PgObjectId& tablegroup_oid)
     : PgDdl(pg_session),
       table_name_(YQL_DATABASE_PGSQL,
                   GetPgsqlNamespaceId(table_id.database_oid),
@@ -168,7 +169,8 @@ PgCreateTable::PgCreateTable(PgSession::ScopedRefPtr pg_session,
                            strcmp(schema_name, "information_schema") == 0),
       is_shared_table_(is_shared_table),
       if_not_exist_(if_not_exist),
-      colocated_(colocated) {
+      colocated_(colocated),
+      tablegroup_oid_(tablegroup_oid) {
   // Add internal primary key column to a Postgres table without a user-specified primary key.
   if (add_primary_key) {
     // For regular user table, ybrowid should be a hash key because ybrowid is a random uuid.
@@ -322,6 +324,11 @@ Status PgCreateTable::Exec() {
     table_creator->set_range_partition_columns(range_columns_, split_rows);
   }
 
+  if (tablegroup_oid_.IsValid()) {
+    VLOG(1) << "\n\n" << tablegroup_oid_.GetYBTablegroupId() << "\n\n";
+    table_creator->tablegroup_id(tablegroup_oid_.GetYBTablegroupId());
+  }
+
   // For index, set indexed (base) table id.
   if (indexed_table_id()) {
     table_creator->indexed_table_id(indexed_table_id()->GetYBTableId());
@@ -410,10 +417,11 @@ PgCreateIndex::PgCreateIndex(PgSession::ScopedRefPtr pg_session,
                              bool is_shared_index,
                              bool is_unique_index,
                              const bool skip_index_backfill,
-                             bool if_not_exist)
+                             bool if_not_exist,
+                             const PgObjectId& tablegroup_oid)
     : PgCreateTable(pg_session, database_name, schema_name, index_name, index_id,
                     is_shared_index, if_not_exist, false /* add_primary_key */,
-                    true /* colocated */),
+                    true /* colocated */, tablegroup_oid),
       base_table_id_(base_table_id),
       is_unique_index_(is_unique_index),
       skip_index_backfill_(skip_index_backfill) {
