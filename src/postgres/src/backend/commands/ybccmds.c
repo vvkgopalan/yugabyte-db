@@ -485,6 +485,7 @@ YBCCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc,
 									   false, /* if_not_exists */
 									   primary_key == NULL /* add_primary_key */,
 									   colocated,
+									   tablegroupId,
 									   &handle));
 
 	CreateTableAddColumns(handle, desc, primary_key, colocated);
@@ -750,6 +751,7 @@ YBCCreateIndex(const char *indexName,
 									   indexInfo->ii_Unique,
 									   skip_index_backfill,
 									   false, /* if_not_exists */
+									   tablegroupId,
 									   &handle));
 
 	for (int i = 0; i < indexTupleDesc->natts; i++)

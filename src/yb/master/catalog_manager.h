@@ -476,6 +476,9 @@ class CatalogManager : public tserver::TabletPeerLookupIf {
   // Is the table a table created for colocated database?
   bool IsColocatedParentTable(const TableInfo& table) const;
 
+  // Is the table a table created for a tablegroup?
+  bool IsTablegroupParentTable(const TableInfo& table) const;
+
   // Is the table a table created in a colocated database?
   bool IsColocatedUserTable(const TableInfo& table) const;
 
