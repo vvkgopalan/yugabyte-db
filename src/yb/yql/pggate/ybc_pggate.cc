@@ -316,7 +316,7 @@ YBCStatus YBCPgNewCreateTable(const char *database_name,
                               const YBCPgOid tablegroup_oid,
                               YBCPgStatement *handle) {
   const PgObjectId table_id(database_oid, table_oid);
-  const PgObjectId tablegroup_id(database_oid, table_oid);
+  const PgObjectId tablegroup_id(database_oid, tablegroup_oid);
   return ToYBCStatus(pgapi->NewCreateTable(
       database_name, schema_name, table_name, table_id, is_shared_table,
       if_not_exist, add_primary_key, colocated, tablegroup_id, handle));

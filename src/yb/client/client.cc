@@ -85,6 +85,8 @@ using yb::master::CreateTablegroupRequestPB;
 using yb::master::CreateTablegroupResponsePB;
 using yb::master::DeleteTablegroupRequestPB;
 using yb::master::DeleteTablegroupResponsePB;
+using yb::master::ListTablegroupsRequestPB;
+using yb::master::ListTablegroupsResponsePB;
 using yb::master::GetNamespaceInfoRequestPB;
 using yb::master::GetNamespaceInfoResponsePB;
 using yb::master::GetTableSchemaRequestPB;
@@ -889,6 +891,39 @@ Status YBClient::DeleteTablegroup(const std::string& tablegroup_name,
   CALL_SYNC_LEADER_MASTER_RPC(req, resp, DeleteTablegroup);
 
   return Status::OK();
+}
+
+Result<vector<master::TablegroupIdentifierPB>> YBClient::ListTablegroups(
+    const std::string& namespace_name, const std::string& tablegroup_name) {
+  GetNamespaceInfoResponsePB ret;
+  Status s = GetNamespaceInfo("", namespace_name, YQL_DATABASE_PGSQL, &ret);
+  if (!s.ok()) {
+    return s;
+  }
+
+  ListTablegroupsRequestPB req;
+  ListTablegroupsResponsePB resp;
+
+  req.set_namespace_id(ret.namespace_().id());
+  CALL_SYNC_LEADER_MASTER_RPC(req, resp, ListTablegroups);
+  auto* tablegroups = resp.mutable_tablegroups();
+  vector<master::TablegroupIdentifierPB> result;
+  result.reserve(tablegroups->size());
+  for (auto& tg : *tablegroups) {
+    result.push_back(std::move(tg));
+  }
+  return result;
+}
+
+Result<bool> YBClient::TablegroupExists(const std::string& namespace_name,
+                                        const std::string& tablegroup_name) {
+
+  for (const auto& tg : VERIFY_RESULT(ListTablegroups(namespace_name, tablegroup_name))) {
+    if (tg.name().compare(tablegroup_name) == 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 Status YBClient::GetUDType(const std::string& namespace_name,

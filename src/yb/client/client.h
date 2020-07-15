@@ -435,6 +435,13 @@ class YBClient {
                                   const std::string& namespace_id,
                                   const std::string& tablegroup_id);
 
+  // Check if the tablegroup given by 'tablegroup_name' or 'tablegroup_id' exists.
+  // Result value is set only on success.
+  Result<bool> TablegroupExists(const std::string& namespace_name,
+                                const std::string& tablegroup_name);
+  Result<vector<master::TablegroupIdentifierPB>> ListTablegroups(
+      const std::string& namespace_name, const std::string& tablegroup_name);
+
   // Authentication and Authorization
   // Create a new role.
   CHECKED_STATUS CreateRole(const RoleName& role_name,

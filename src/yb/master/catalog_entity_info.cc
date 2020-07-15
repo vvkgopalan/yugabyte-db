@@ -632,11 +632,11 @@ string NamespaceInfo::ToString() const {
 // TablegroupInfo
 // ================================================================================================
 
-TablegroupInfo::TablegroupInfo(TablegroupId tablegroup_id, NamespaceId ns_id,
-                               std::string tablegroup_name) :
+TablegroupInfo::TablegroupInfo(TablegroupId tablegroup_id, std::string tablegroup_name,
+                               NamespaceId ns_id) :
                                tablegroup_id_(tablegroup_id),
-                               ns_id_(ns_id),
-                               tablegroup_name_(tablegroup_name) {}
+                               tablegroup_name_(tablegroup_name),
+                               ns_id_(ns_id) {}
 
 // ================================================================================================
 // UDTypeInfo

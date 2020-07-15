@@ -531,12 +531,12 @@ class NamespaceInfo : public RefCountedThreadSafe<NamespaceInfo>,
 class TablegroupInfo : public RefCountedThreadSafe<TablegroupInfo>{
  public:
   explicit TablegroupInfo(TablegroupId tablegroup_id,
-                          NamespaceId ns_id,
-                          std::string tablegroup_name);
+                          std::string tablegroup_name,
+                          NamespaceId ns_id);
 
   const std::string& id() const { return tablegroup_id_; }
-  const std::string& ns_id() const { return ns_id_; }
   const std::string& name() const { return tablegroup_name_; }
+  const std::string& ns_id() const { return ns_id_; }
 
  private:
   friend class RefCountedThreadSafe<TablegroupInfo>;
@@ -544,8 +544,8 @@ class TablegroupInfo : public RefCountedThreadSafe<TablegroupInfo>{
 
   // The ID field is used in the sys_catalog table.
   const TablegroupId tablegroup_id_;
-  const NamespaceId ns_id_;
   const std::string tablegroup_name_;
+  const NamespaceId ns_id_;
 
   DISALLOW_COPY_AND_ASSIGN(TablegroupInfo);
 };

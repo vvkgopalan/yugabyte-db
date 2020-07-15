@@ -2071,13 +2071,12 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     // If the table is colocated, then there should be no hash partition columns.
     // Do the same for tables that are being placed in tablegroups.
     if (schema.num_hash_key_columns() > 0) {
-      if (colocated){
-        Status s =
-          STATUS(InvalidArgument, "Cannot create hash partitioned table in colocated database");
+      Status s;
+      if (colocated) {
+        s = STATUS(InvalidArgument, "Cannot create hash partitioned table in colocated database");
+      } else {
+        s = STATUS(InvalidArgument, "Cannot create hash partitioned table in a tablegroup");
       }
-      else
-        Status s =
-          STATUS(InvalidArgument, "Cannot create hash partitioned table in a tablegroup");
       return SetupError(resp->mutable_error(), MasterErrorPB::INVALID_SCHEMA, s);
     }
   } else if (
@@ -2261,21 +2260,17 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     if (req.has_tablegroup_id() &&
         tablegroup_tablet_ids_map_.find(ns->id()) != tablegroup_tablet_ids_map_.end() &&
         tablegroup_tablet_ids_map_[ns->id()].find(req.tablegroup_id()) !=
-            tablegroup_tablet_ids_map_[ns->id()].end()) {
+        tablegroup_tablet_ids_map_[ns->id()].end()) {
       tablegroup_exists = true;
-      VLOG(1) << "\n\nTABLEGROUP EXISTS\n\n";
     }
-
     // If using tablegroups, tablets_exist will always be false.
     RETURN_NOT_OK(CreateTableInMemory(
         req, schema, partition_schema, !tablets_exist && !tablegroup_exists /* create_tablets */,
         namespace_id, partitions, &index_info, &tablets, resp, &table));
 
     if (req.has_tablegroup_id()) {
-      VLOG(1) << "\n\nLOOKING UP TABLET\n\n";
-      //table->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
+      table->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
       if (tablegroup_exists) {
-        VLOG(1) << "\n\nFINDING TABLEGROUP TABLET IN MAP\n\n";
         scoped_refptr<TabletInfo> tablet =
             tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()];
         DSCHECK(
@@ -2293,7 +2288,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
         DSCHECK_EQ(
             tablets.size(), 1, InternalError,
             "Only one tablet should be created for each tablegroup");
-        //tablets[0]->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
+        tablets[0]->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
         tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()] =
             tablet_map_->find(tablets[0]->id())->second;
       }
@@ -4233,7 +4228,8 @@ bool CatalogManager::IsUserCreatedTableUnlocked(const TableInfo& table) const {
   if (table.GetTableType() == PGSQL_TABLE_TYPE || table.GetTableType() == YQL_TABLE_TYPE) {
     if (!IsSystemTableUnlocked(table) && !IsSequencesSystemTable(table) &&
         GetNamespaceNameUnlocked(table.namespace_id()) != kSystemNamespaceName &&
-        !IsColocatedParentTable(table)) {
+        !IsColocatedParentTable(table) &&
+        !IsTablegroupParentTable(table)) {
       return true;
     }
   }
@@ -4764,9 +4760,8 @@ Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
   ctreq.mutable_namespace_()->set_name(req->namespace_name());
   ctreq.mutable_namespace_()->set_id(req->namespace_id());
   ctreq.set_table_type(PGSQL_TABLE_TYPE);
-  //ctreq.set_colocated(true);
+  ctreq.set_colocated(true);
   ctreq.set_tablegroup_id(req->id());
-  VLOG(1) << "\n\nTABLEGROUP ID" << req->id() << "\n\n";
 
   YBSchemaBuilder schemaBuilder;
   schemaBuilder.AddColumn("parent_column")->Type(BINARY)->PrimaryKey()->NotNull();
@@ -4830,6 +4825,32 @@ Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
   tablegroup_tablet_ids_map_[req->namespace_id()].erase(req->id());
 
   LOG(INFO) << "Deleted table " << parent_table_name;
+  return Status::OK();
+}
+
+Status CatalogManager::ListTablegroups(const ListTablegroupsRequestPB* req,
+                                       ListTablegroupsResponsePB* resp) {
+  RETURN_NOT_OK(CheckOnline());
+
+  SharedLock<LockType> l(lock_);
+
+  if (!req->has_namespace_id() ||
+      tablegroup_tablet_ids_map_.find(req->namespace_id()) == tablegroup_tablet_ids_map_.end()) {
+    return STATUS(NotFound, "Tablegroups not found for namespace id: ", req->namespace_id());
+  }
+
+  for (const auto& entry : tablegroup_tablet_ids_map_[req->namespace_id()]) {
+    const TablegroupId tgid = entry.first;
+    if (tablegroup_ids_map_.find(tgid) == tablegroup_ids_map_.end()) {
+      return STATUS(NotFound, "Tablegroup info not found for tablegroup id: ", tgid);
+    }
+    scoped_refptr<TablegroupInfo> tginfo = tablegroup_ids_map_[tgid];
+
+    TablegroupIdentifierPB *tg = resp->add_tablegroups();
+    tg->set_id(tginfo->id());
+    tg->set_name(tginfo->name());
+    tg->set_namespace_id(tginfo->ns_id());
+  }
   return Status::OK();
 }
 
@@ -6368,12 +6389,11 @@ void CatalogManager::DeleteTabletsAndSendRequests(const scoped_refptr<TableInfo>
   if (IsColocatedParentTable(*table)) {
     SharedLock<LockType> catalog_lock(lock_);
     colocated_tablet_ids_map_.erase(table->namespace_id());
-  }
-  else if (IsTablegroupParentTable(*table)) {
+  } else if (IsTablegroupParentTable(*table)) {
     // In the case of dropped database, need to delete tablegroup info.
     SharedLock<LockType> catalog_lock(lock_);
     for (auto tgroup : tablegroup_tablet_ids_map_[table->namespace_id()]) {
-
+      tablegroup_ids_map_.erase(tgroup.first);
     }
     tablegroup_tablet_ids_map_.erase(table->namespace_id());
   }

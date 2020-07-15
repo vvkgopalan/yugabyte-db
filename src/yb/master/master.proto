@@ -170,6 +170,17 @@ message TableIdentifierPB {
   optional NamespaceIdentifierPB namespace = 3;
 }
 
+message TablegroupIdentifierPB {
+  // The tablegroup ID to fetch info.
+  optional bytes id = 1;
+
+  // The tablegroup name to fetch info.
+  optional string name = 2;
+
+  // The tablegroup namespace (if empty - using default namespace).
+  optional bytes namespace_id = 3;
+}
+
 // This represents one instance of a placement constraint for a table. It is
 // used to dictate what is the minimum number of expected replicas in a certain
 // cloud/region/zone combo.
@@ -238,7 +249,6 @@ message SysRowEntry {
     SYS_CONFIG = 9;
     CDC_STREAM = 10;
     UNIVERSE_REPLICATION = 11;
-    //TABLEGROUP = 12;
   }
 
   // The type of entry we are storing. Since the data is serialized, we cannot
@@ -416,18 +426,6 @@ message SysNamespaceEntryPB {
 
   optional State state = 5 [ default = UNKNOWN ];
 }
-
-// The data part of a SysRowEntry in the sys.catalog table for a tablegroup.
-/*message SysTablegroupEntryPB {
-  enum State {
-    ACTIVE = 0;
-    DELETING = 1;   // Delete Requested. Transitive State. Possible Next States: [DELETED].
-    DELETED = 2;    // Delete Finished on TServers or Tombstone. Final State before erasure.
-  }
-
-  optional bytes name = 1;
-  optional bytes namespace_id = 3;
-}*/
 
 // The data part of a SysRowEntry in the sys.catalog table for a User Defined Type.
 message SysUDTypeEntryPB {
@@ -1467,6 +1465,17 @@ message DeleteTablegroupResponsePB {
   optional MasterErrorPB error = 1;
 }
 
+message ListTablegroupsRequestPB {
+  optional bytes namespace_id = 1;
+}
+
+message ListTablegroupsResponsePB {
+  // The error, if an error occurred with this request.
+  optional MasterErrorPB error = 1;
+
+  repeated TablegroupIdentifierPB tablegroups = 2;
+}
+
 // ============================================================================
 //  Authentication and Authorization
 // ============================================================================
@@ -1873,6 +1882,7 @@ service MasterService {
   // For Tablegroup:
   rpc CreateTablegroup(CreateTablegroupRequestPB) returns (CreateTablegroupResponsePB);
   rpc DeleteTablegroup(DeleteTablegroupRequestPB) returns (DeleteTablegroupResponsePB);
+  rpc ListTablegroups(ListTablegroupsRequestPB) returns (ListTablegroupsResponsePB);
 
   // For Postgres:
   rpc ReservePgsqlOids(ReservePgsqlOidsRequestPB) returns (ReservePgsqlOidsResponsePB);
