@@ -72,7 +72,7 @@ CATALOG(pg_class,1259,RelationRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(83,Relat
 	TransactionId relfrozenxid; /* all Xids < this are frozen in this rel */
 	TransactionId relminmxid;	/* all multixacts in this rel are >= this.
 								 * this is really a MultiXactId */
-	Oid 		reltablegroup   BKI_DEFAULT(0); /*OID of tablegroup; 0 if none */
+	Oid 		reltablegroup   BKI_DEFAULT(0); /* OID of tablegroup; 0 if none */
 
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	/* NOTE: These fields are not present in a relcache entry's rd_rel field. */

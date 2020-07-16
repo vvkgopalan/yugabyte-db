@@ -1,4 +1,3 @@
-
 /*-------------------------------------------------------------------------
  *
  * event_trigger.c
@@ -1095,13 +1094,15 @@ EventTriggerSupportsObjectType(ObjectType obtype)
 	switch (obtype)
 	{
 		case OBJECT_DATABASE:
-		case OBJECT_TABLEGROUP:
 		case OBJECT_TABLESPACE:
 		case OBJECT_ROLE:
 			/* no support for global objects */
 			return false;
 		case OBJECT_EVENT_TRIGGER:
 			/* no support for event triggers on event triggers */
+			return false;
+		case OBJECT_TABLEGROUP:
+			/* no support for event triggers on tablegroups */
 			return false;
 		case OBJECT_ACCESS_METHOD:
 		case OBJECT_AGGREGATE:
@@ -1170,13 +1171,15 @@ EventTriggerSupportsObjectClass(ObjectClass objclass)
 	switch (objclass)
 	{
 		case OCLASS_DATABASE:
-		case OCLASS_TBLGROUP:
 		case OCLASS_TBLSPACE:
 		case OCLASS_ROLE:
 			/* no support for global objects */
 			return false;
 		case OCLASS_EVENT_TRIGGER:
 			/* no support for event triggers on event triggers */
+			return false;
+		case OCLASS_TBLGROUP:
+			/* no support for event triggers on tablegroups */
 			return false;
 		case OCLASS_CLASS:
 		case OCLASS_PROC:

@@ -3378,7 +3378,8 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					if ($12 && $14)
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+										errmsg("Cannot use TABLEGROUP with TABLESPACE."),
+										errdetail("The tablespace of the tablegroup will be used.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -3412,7 +3413,8 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					if ($15 && $17)
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+										errmsg("Cannot use TABLEGROUP with TABLESPACE."),
+										errdetail("The tablespace of the tablegroup will be used.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -3447,7 +3449,8 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					if ($11 && $13)
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+										errmsg("Cannot use TABLEGROUP with TABLESPACE."),
+										errdetail("The tablespace of the tablegroup will be used.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -3482,7 +3485,8 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					if ($14 && $16)
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+										errmsg("Cannot use TABLEGROUP with TABLESPACE."),
+										errdetail("The tablespace of the tablegroup will be used.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -3517,7 +3521,8 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					if ($13 && $15)
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+										errmsg("Cannot use TABLEGROUP with TABLESPACE."),
+										errdetail("The tablespace of the tablegroup will be used.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -3552,7 +3557,8 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					if ($16 && $18)
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+										errmsg("Cannot use TABLEGROUP with TABLESPACE."),
+										errdetail("The tablespace of the tablegroup will be used.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -7953,7 +7959,8 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 					if ($14 && $16)
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+										errmsg("Cannot use TABLEGROUP with TABLESPACE."),
+										errdetail("The tablespace of the tablegroup will be used.")));
 					}
 					$$ = (Node *)n;
 				}
@@ -7989,7 +7996,8 @@ IndexStmt:	CREATE opt_unique INDEX opt_concurrently opt_index_name
 					if ($17 && $19)
 					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
-										errmsg("Cannot use TABLEGROUP with TABLESPACE.")));
+										errmsg("Cannot use TABLEGROUP with TABLESPACE."),
+										errdetail("The tablespace of the tablegroup will be used.")));
 					}
 					$$ = (Node *)n;
 				}

@@ -344,7 +344,7 @@ DefineIndex(Oid relationId,
 	Oid			accessMethodId;
 	Oid			namespaceId;
 	Oid			tablespaceId;
-	Oid 		tableGroupId;
+	Oid 		 tableGroupId;
 	Oid			createdConstraintId = InvalidOid;
 	List	   *indexColNames;
 	List	   *allIndexParams;
@@ -565,7 +565,10 @@ DefineIndex(Oid relationId,
 		/* note InvalidOid is OK in this case */
 	}
 
-	/* Select tablegroup to use.  If not specified, InvalidOid. */
+	/* Select tablegroup to use.  If not specified, default to the
+	 * tablegroup of the indexed table. If no tablegroup for the indexed table
+	 * then set to InvalidOid (no tablegroup).
+	 */
 	if (stmt->tablegroupname)
 	{
 		tableGroupId = get_tablegroup_oid(stmt->tablegroupname, false);
