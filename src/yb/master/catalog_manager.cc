@@ -2071,12 +2071,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     // If the table is colocated, then there should be no hash partition columns.
     // Do the same for tables that are being placed in tablegroups.
     if (schema.num_hash_key_columns() > 0) {
-      Status s;
-      if (colocated) {
-        s = STATUS(InvalidArgument, "Cannot create hash partitioned table in colocated database");
-      } else {
-        s = STATUS(InvalidArgument, "Cannot create hash partitioned table in a tablegroup");
-      }
+      Status s = STATUS(InvalidArgument, "Cannot colocate hash partitioned table");
       return SetupError(resp->mutable_error(), MasterErrorPB::INVALID_SCHEMA, s);
     }
   } else if (
@@ -2216,7 +2211,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   scoped_refptr<TableInfo> table;
   vector<TabletInfo*> tablets;
   bool tablets_exist;
-  bool tablegroup_exists = false;
+  bool create_new_tablegroup = true;
 
   {
     std::lock_guard<LockType> l(lock_);
@@ -2257,20 +2252,23 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
       return SetupError(resp->mutable_error(), NamespaceMasterError(ns->state()), s);
     }
 
+    // Check whether this CREATE TABLE request which has a tablegroup_id is for a normal user table
+    // or the request to create the parent table for the tablegroup. This is done by checking the
+    // catalog manager maps.
     if (req.has_tablegroup_id() &&
         tablegroup_tablet_ids_map_.find(ns->id()) != tablegroup_tablet_ids_map_.end() &&
         tablegroup_tablet_ids_map_[ns->id()].find(req.tablegroup_id()) !=
         tablegroup_tablet_ids_map_[ns->id()].end()) {
-      tablegroup_exists = true;
+      create_new_tablegroup = false;
     }
     // If using tablegroups, tablets_exist will always be false.
     RETURN_NOT_OK(CreateTableInMemory(
-        req, schema, partition_schema, !tablets_exist && !tablegroup_exists /* create_tablets */,
+        req, schema, partition_schema, !tablets_exist && create_new_tablegroup /* create_tablets */,
         namespace_id, partitions, &index_info, &tablets, resp, &table));
 
     if (req.has_tablegroup_id()) {
       table->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
-      if (tablegroup_exists) {
+      if (!create_new_tablegroup) {
         scoped_refptr<TabletInfo> tablet =
             tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()];
         DSCHECK(
@@ -2284,11 +2282,13 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
 
         tablet->mutable_metadata()->StartMutation();
         table->AddTablets(tablets);
+        tablegroup_ids_map_[req.tablegroup_id()]->AddChildTable(table->id());
       } else {
         DSCHECK_EQ(
             tablets.size(), 1, InternalError,
             "Only one tablet should be created for each tablegroup");
         tablets[0]->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
+        // Update catalog manager maps for tablegroups
         tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()] =
             tablet_map_->find(tablets[0]->id())->second;
       }
@@ -2330,7 +2330,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   // They will get committed at the end of this function.
   // Sanity check: the tables and tablets should all be in "preparing" state.
   CHECK_EQ(SysTablesEntryPB::PREPARING, table->metadata().dirty().pb.state());
-  if (tablets_exist || tablegroup_exists) {
+  if (tablets_exist || (req.has_tablegroup_id() && !create_new_tablegroup)) {
     TRACE("Inserted new table and updating tablet info into CatalogManager maps");
     VLOG(1) << "Inserted new table and updating tablet info into "
                "CatalogManager maps";
@@ -2390,7 +2390,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     tablet->mutable_metadata()->CommitMutation();
   }
 
-  if ((colocated && tablets_exist) || (tablegroup_exists && req.has_tablegroup_id())) {
+  if ((colocated && tablets_exist) || (!create_new_tablegroup && req.has_tablegroup_id())) {
     auto call =
         std::make_shared<AsyncAddTableToTablet>(master_, AsyncTaskPool(), tablets[0], table);
     table->AddTask(call);
@@ -4752,6 +4752,13 @@ Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
 
   CreateTableRequestPB ctreq;
   CreateTableResponsePB ctresp;
+
+  // Sanity check for PB fields
+  if (!req->has_id() || !req->has_namespace_id()
+      || !req->has_namespace_name() || !req->has_name()) {
+    Status s = STATUS(InvalidArgument, "Improper CREATE TABLEGROUP request (missing fields).");
+  }
+
   // Use the tablegroup id as the prefix for the parent table id.
   const auto parent_table_id = req->id() + kTablegroupParentTableIdSuffix;
   const auto parent_table_name = req->id() + kTablegroupParentTableNameSuffix;
@@ -4776,6 +4783,7 @@ Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
   // We do not lock here so it is technically possible that the table was already created.
   // If so, there is nothing to do so we just ignore the "AlreadyPresent" error.
   if (!s.ok() && !s.IsAlreadyPresent()) {
+    LOG(WARNING) << "Tablegroup creation failed: " << s.ToString();
     return s;
   }
 
@@ -4792,6 +4800,12 @@ Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
                                         rpc::RpcContext* rpc) {
   DeleteTableRequestPB dtreq;
   DeleteTableResponsePB dtresp;
+
+  // Sanity check for PB fields
+  if (!req->has_id() || !req->has_namespace_id()) {
+    Status s = STATUS(InvalidArgument, "Improper DELETE TABLEGROUP request (missing fields).");
+  }
+
   // Use the tablegroup id as the prefix for the parent table id.
   const auto parent_table_id = req->id() + kTablegroupParentTableIdSuffix;
   const auto parent_table_name = req->id() + kTablegroupParentTableNameSuffix;
@@ -4803,8 +4817,7 @@ Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
 
   // Handle special cases based on resp.error().
   if (dtresp.has_error()) {
-    // Not sure how to handle the case of multiple attempts - does this need to be done
-    // within client?
+    // DROP TABLE has a case to retry - do I need to do something similar?
     LOG_IF(DFATAL, s.ok()) << "Expecting error status if response has error: " <<
         dtresp.error().code() << " Status: " << dtresp.error().status().ShortDebugString();
     return StatusFromPB(dtresp.error().status());
@@ -4834,22 +4847,26 @@ Status CatalogManager::ListTablegroups(const ListTablegroupsRequestPB* req,
 
   SharedLock<LockType> l(lock_);
 
-  if (!req->has_namespace_id() ||
-      tablegroup_tablet_ids_map_.find(req->namespace_id()) == tablegroup_tablet_ids_map_.end()) {
+  if (!req->has_namespace_id()) {
+    Status s = STATUS(InvalidArgument, "Improper ListTablegroups request (missing fields).");
+  }
+
+  if (tablegroup_tablet_ids_map_.find(req->namespace_id()) == tablegroup_tablet_ids_map_.end()) {
     return STATUS(NotFound, "Tablegroups not found for namespace id: ", req->namespace_id());
   }
 
   for (const auto& entry : tablegroup_tablet_ids_map_[req->namespace_id()]) {
     const TablegroupId tgid = entry.first;
     if (tablegroup_ids_map_.find(tgid) == tablegroup_ids_map_.end()) {
-      return STATUS(NotFound, "Tablegroup info not found for tablegroup id: ", tgid);
+      LOG(WARNING) << "Tablegroup info in " << req->namespace_id()
+                   << " not found for tablegroup id: " << tgid;
     }
     scoped_refptr<TablegroupInfo> tginfo = tablegroup_ids_map_[tgid];
 
     TablegroupIdentifierPB *tg = resp->add_tablegroups();
     tg->set_id(tginfo->id());
     tg->set_name(tginfo->name());
-    tg->set_namespace_id(tginfo->ns_id());
+    tg->set_namespace_id(tginfo->namespace_id());
   }
   return Status::OK();
 }

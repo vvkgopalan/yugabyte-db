@@ -536,7 +536,13 @@ class TablegroupInfo : public RefCountedThreadSafe<TablegroupInfo>{
 
   const std::string& id() const { return tablegroup_id_; }
   const std::string& name() const { return tablegroup_name_; }
-  const std::string& ns_id() const { return ns_id_; }
+  const std::string& namespace_id() const { return namespace_id_; }
+
+  // Operations to track table_set_ information (what tables belong to the tablegroup)
+  void AddChildTable(const TableId& table_id);
+  void DeleteChildTable(const TableId& table_id);
+  bool HasChildTables() const;
+  std::size_t NumChildTables() const;
 
  private:
   friend class RefCountedThreadSafe<TablegroupInfo>;
@@ -545,7 +551,11 @@ class TablegroupInfo : public RefCountedThreadSafe<TablegroupInfo>{
   // The ID field is used in the sys_catalog table.
   const TablegroupId tablegroup_id_;
   const std::string tablegroup_name_;
-  const NamespaceId ns_id_;
+  const NamespaceId namespace_id_;
+
+  // Protects table_set_.
+  mutable simple_spinlock lock_;
+  std::unordered_set<TableId> table_set_;
 
   DISALLOW_COPY_AND_ASSIGN(TablegroupInfo);
 };

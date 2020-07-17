@@ -1158,7 +1158,6 @@ TEST_F(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(ColocatedTablegroups)) {
   const string kTablegroupAltName ="test_alt_tgroup";
   google::protobuf::RepeatedPtrField<master::TabletLocationsPB> tablets;
   google::protobuf::RepeatedPtrField<master::TabletLocationsPB> tablets_bar_index;
-  string ns_id;
 
   auto conn = ASSERT_RESULT(Connect());
   ASSERT_OK(conn.ExecuteFormat("CREATE DATABASE $0", kDatabaseName));
