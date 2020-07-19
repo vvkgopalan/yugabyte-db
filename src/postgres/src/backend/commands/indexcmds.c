@@ -591,6 +591,17 @@ DefineIndex(Oid relationId,
 						   get_tablespace_name(tablespaceId));
 	}
 
+	/* Check permissions for tablegroup */
+	if (OidIsValid(tableGroupId) && !pg_tablegroup_ownercheck(tableGroupId, GetUserId()))
+	{
+		AclResult	aclresult;
+
+		aclresult = pg_tablegroup_aclcheck(tableGroupId, GetUserId(), ACL_CREATE);
+		if (aclresult != ACLCHECK_OK)
+				aclcheck_error(aclresult, OBJECT_TABLEGROUP,
+						   			 	 get_tablegroup_name(tableGroupId));
+	}
+
 	/*
 	 * Force shared indexes into the pg_global tablespace.  This is a bit of a
 	 * hack but seems simpler than marking them in the BKI commands.  On the
