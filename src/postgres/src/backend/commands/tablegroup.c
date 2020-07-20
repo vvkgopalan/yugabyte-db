@@ -198,16 +198,16 @@ DropTableGroup(DropTableGroupStmt *stmt)
 
 	// Scan uses pg_class_tblgrp_index since pg_class can grow large
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
-	ScanKeyInit(&class_entry[0],
+	/*ScanKeyInit(&class_entry[0],
 							Anum_pg_class_reltablegroup,
 							BTEqualStrategyNumber, F_OIDEQ,
-							ObjectIdGetDatum(tablegroupoid));
-	class_scandesc = systable_beginscan(class_rel,
+							ObjectIdGetDatum(tablegroupoid));*/
+	/*class_scandesc = systable_beginscan(class_rel,
 									    								ClassTblgrpIndexId,
 									    								true,
 									    								NULL,
 									    								1,
-									    								class_entry);
+									    								class_entry);*/
 	class_tuple = systable_getnext(class_scandesc);
 	systable_endscan(class_scandesc);
 	heap_close(class_rel, NoLock);
@@ -314,9 +314,9 @@ get_table_tablegroup_oid(Oid table_oid)
 	heap_close(rel, NoLock);
 
 	/* We assume that there can be at most one matching tuple */
-	if (HeapTupleIsValid(tuple))
+	/*if (HeapTupleIsValid(tuple))
 		result = ((Form_pg_class) GETSTRUCT(tuple))->reltablegroup;
-	else
+	else*/
 		result = InvalidOid;
 
 	return result;
@@ -404,12 +404,12 @@ RemoveTableGroupById(Oid grp_oid)
 
 	// Scan uses pg_class_tblgrp_index since pg_class can grow large
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
-	ScanKeyInit(&class_entry[0],
+	/*ScanKeyInit(&class_entry[0],
 							Anum_pg_class_reltablegroup,
 							BTEqualStrategyNumber, F_OIDEQ,
-							ObjectIdGetDatum(grp_oid));
-	sscan_class = systable_beginscan(class_rel, ClassTblgrpIndexId, true,
-								     							 NULL, 1, class_entry);
+							ObjectIdGetDatum(grp_oid));*/
+	/*sscan_class = systable_beginscan(class_rel, ClassTblgrpIndexId, true,
+								     							 NULL, 1, class_entry);*/
 	class_tuple = systable_getnext(sscan_class);
 	systable_endscan(sscan_class);
 	heap_close(class_rel, NoLock);

@@ -569,13 +569,18 @@ DefineIndex(Oid relationId,
 	 * tablegroup of the indexed table. If no tablegroup for the indexed table
 	 * then set to InvalidOid (no tablegroup).
 	 */
+	bool flag = false;
 	if (stmt->tablegroupname)
 	{
 		tableGroupId = get_tablegroup_oid(stmt->tablegroupname, false);
 	}
-	else
+	else if (flag)
 	{
 		tableGroupId = get_table_tablegroup_oid(relationId);
+	}
+	else
+	{
+		tableGroupId = InvalidOid;
 	}
 
 	/* Check tablespace permissions */
