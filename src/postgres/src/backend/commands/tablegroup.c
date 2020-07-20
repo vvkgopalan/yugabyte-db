@@ -155,13 +155,13 @@ DropTableGroup(DropTableGroupStmt *stmt)
 {
 	char *tablegroupname = stmt->tablegroupname;
 	HeapScanDesc scandesc;
-	SysScanDesc  class_scandesc;
+	SysScanDesc  class_scandesc = NULL;
 	Relation		 rel;
 	Relation 		 class_rel;
 	HeapTuple		 tuple;
 	HeapTuple 	 class_tuple;
 	ScanKeyData  entry[1];
-	ScanKeyData  class_entry[1];
+	//ScanKeyData  class_entry[1];
 	Oid					 tablegroupoid;
 
 	/*
@@ -373,10 +373,10 @@ void
 RemoveTableGroupById(Oid grp_oid)
 {
 	Relation		 pg_tblgrp_rel;
-	SysScanDesc  sscan_class;
+	SysScanDesc  sscan_class = NULL;
 	HeapScanDesc scandesc;
 	ScanKeyData  skey[1];
-	ScanKeyData  class_entry[1];
+	//ScanKeyData  class_entry[1];
 	HeapTuple		 tuple;
 	HeapTuple    class_tuple;
 	Relation		 class_rel;
