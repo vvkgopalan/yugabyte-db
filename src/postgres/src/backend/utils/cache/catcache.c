@@ -28,6 +28,7 @@
 #include "catalog/pg_operator.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_tablegroup.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
 #ifdef CATCACHE_STATS
@@ -950,6 +951,11 @@ CatalogCacheInitializeCache(CatCache *cache)
 	int			i;
 
 	CatalogCacheInitializeCache_DEBUG1;
+
+	// skip for TableGroupRelationId
+	if (cache->cc_reloid == TableGroupRelationId) {
+		return;
+	}
 
 	relation = heap_open(cache->cc_reloid, AccessShareLock);
 

@@ -81,8 +81,6 @@ CATALOG(pg_class,1259,RelationRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(83,Relat
 } FormData_pg_class;
 
 /* Size of fixed part of pg_class tuples, not counting var-length fields */
-//#define CLASS_TUPLE_SIZE \
-//	 (offsetof(FormData_pg_class,reltablegroup) + sizeof(Oid))
 #define CLASS_TUPLE_SIZE \
 	 (offsetof(FormData_pg_class,relminmxid) + sizeof(TransactionId))
 

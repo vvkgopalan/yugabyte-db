@@ -26,6 +26,7 @@
 #include "access/tuptoaster.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
+#include "commands/tablegroup.h"
 #include "commands/tablespace.h"
 #include "commands/view.h"
 #include "nodes/makefuncs.h"
@@ -457,6 +458,18 @@ static relopt_string stringRelOpts[] =
 		0,
 		true,
 		validateWithCheckOption,
+		NULL
+	},
+	{
+		{
+			"tablegroup",
+			"Relation has TABLEGROUP defined",
+			RELOPT_KIND_HEAP,
+			AccessExclusiveLock
+		},
+		0,
+		true,
+		validateTablegroupName,
 		NULL
 	},
 	/* list terminator */
@@ -1396,6 +1409,8 @@ default_reloptions(Datum reloptions, bool validate, relopt_kind kind)
 		offsetof(StdRdOptions, vacuum_cleanup_index_scale_factor)},
 		{"colocated", RELOPT_TYPE_BOOL,
 		offsetof(StdRdOptions, colocated)},
+		{"tablegroup", RELOPT_TYPE_STRING,
+		offsetof(StdRdOptions, tablegroup)},
 	};
 
 	options = parseRelOptions(reloptions, validate, kind, &numoptions);

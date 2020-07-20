@@ -2767,12 +2767,18 @@ reloption_list:
 					if (strcmp($1->defname, "colocated") == 0) {
 						parser_ybc_beta_feature(@1, "colocated table");
 					}
+					if (strcmp($1->defname, "tablegroup") == 0) {
+						parser_ybc_beta_feature(@1, "tablegroup");
+					}
 					$$ = list_make1($1);
 				}
 			| reloption_list ',' reloption_elem
 				{
 					if (strcmp($3->defname, "colocated") == 0) {
 						parser_ybc_beta_feature(@1, "colocated table");
+					}
+					if (strcmp($3->defname, "tablegroup") == 0) {
+						parser_ybc_beta_feature(@1, "tablegroup");
 					}
 					$$ = lappend($1, $3);
 				}

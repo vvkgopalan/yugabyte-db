@@ -269,8 +269,7 @@ Boot_CreateStmt:
 												   RELPERSISTENCE_PERMANENT,
 												   shared_relation,
 												   mapped_relation,
-												   true,
-												   InvalidOid);
+												   true);
 						elog(DEBUG4, "bootstrap relation created");
 					}
 					else
@@ -298,8 +297,7 @@ Boot_CreateStmt:
 													  true,
 													  false,
 													  InvalidOid,
-													  NULL,
-													  InvalidOid);
+													  NULL);
 						elog(DEBUG4, "relation created with OID %u", id);
 					}
 

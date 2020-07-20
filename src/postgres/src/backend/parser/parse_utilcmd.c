@@ -341,6 +341,8 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString)
 		}
 		else if (strcmp(def->defname, "colocated") == 0)
 			(void) defGetBoolean(def);
+		else if (strcmp(def->defname, "tablegroup") == 0)
+			(void) defGetString(def);
 		else
 			ereport(WARNING,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

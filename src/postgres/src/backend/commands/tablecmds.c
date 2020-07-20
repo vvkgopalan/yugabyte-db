@@ -550,7 +550,6 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	Oid			namespaceId;
 	Oid			relationId = InvalidOid;
 	Oid			tablespaceId;
-	Oid 		tablegroupId;
 	Relation	rel;
 	TupleDesc	descriptor;
 	List	   *inheritOids;
@@ -640,32 +639,6 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("only shared relations can be placed in pg_global tablespace")));
-
-	/* Select tablegroup to use.  If not specified, InvalidOid. */
-	if (stmt->tablegroupname)
-	{
-		if (MyDatabaseColocated)
-				ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 			 errmsg("cannot use tablegroups in a colocated database")));
-		else
-			tablegroupId = get_tablegroup_oid(stmt->tablegroupname, false);
-	}
-	else
-	{
-		tablegroupId = InvalidOid;
-	}
-
-	/* Check permissions for tablegroup */
-	if (OidIsValid(tablegroupId) && !pg_tablegroup_ownercheck(tablegroupId, GetUserId()))
-	{
-		AclResult	aclresult;
-
-		aclresult = pg_tablegroup_aclcheck(tablegroupId, GetUserId(), ACL_CREATE);
-		if (aclresult != ACLCHECK_OK)
-				aclcheck_error(aclresult, OBJECT_TABLEGROUP,
-						   			 	 get_tablegroup_name(tablegroupId));
-	}
 
 	/* Identify user ID that will own the table */
 	if (!OidIsValid(ownerId))
@@ -822,8 +795,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 										  allowSystemTableMods,
 										  false,
 										  InvalidOid,
-										  typaddress,
-										  tablegroupId);
+										  typaddress);
 
 	/* Store inheritance information for new rel. */
 	StoreCatalogInheritance(relationId, inheritOids, stmt->partbound != NULL);

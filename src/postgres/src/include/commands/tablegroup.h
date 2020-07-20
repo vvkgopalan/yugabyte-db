@@ -40,6 +40,13 @@
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 
+typedef enum ColocationVersionType
+{
+  COLOCATION_VERSION_UNSET,        /* Not yet set. */
+  COLOCATION_VERSION_DATABASE,  	 /* Old database-level version. */
+  COLOCATION_VERSION_TABLEGROUP,   /* New tablegroup-level version. (physical pg_tablegroup exists) */
+} ColocationVersionType;
+
 extern Oid	CreateTableGroup(CreateTableGroupStmt *stmt);
 extern void DropTableGroup(DropTableGroupStmt *stmt);
 
@@ -48,5 +55,6 @@ extern Oid  get_table_tablegroup_oid(Oid table_oid);
 extern char *get_tablegroup_name(Oid grp_oid);
 
 extern void RemoveTableGroupById(Oid grp_oid);
+extern void validateTablegroupName(const char *value);
 
 #endif							/* TABLEGROUP_H */

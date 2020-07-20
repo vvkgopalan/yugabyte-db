@@ -783,8 +783,7 @@ index_create(Relation heapRelation,
 			 bool is_internal,
 			 Oid *constraintId,
 			 OptSplit *split_options,
-			 const bool skip_index_backfill,
-			 Oid tableGroupId)
+			 const bool skip_index_backfill)
 {
 	Oid			heapRelationId = RelationGetRelid(heapRelation);
 	Relation	pg_class;
@@ -968,8 +967,7 @@ index_create(Relation heapRelation,
 								relpersistence,
 								shared_relation,
 								mapped_relation,
-								allow_system_table_mods,
-								tableGroupId);
+								allow_system_table_mods);
 
 	Assert(indexRelationId == RelationGetRelid(indexRelation));
 

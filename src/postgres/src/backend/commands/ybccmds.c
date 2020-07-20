@@ -36,12 +36,14 @@
 #include "catalog/ybctype.h"
 #include "commands/dbcommands.h"
 #include "commands/ybccmds.h"
+#include "commands/tablegroup.h"
 
 #include "access/htup_details.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "utils/acl.h"
 #include "executor/tuptable.h"
 #include "executor/ybcExpr.h"
 
@@ -424,6 +426,7 @@ YBCCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, O
 
 	/* Handle user-supplied colocated reloption */
 	ListCell *opt_cell;
+	char *tablegroup_name = NULL;
 	foreach(opt_cell, stmt->options)
 	{
 		DefElem *def = (DefElem *) lfirst(opt_cell);
@@ -443,11 +446,45 @@ YBCCreateTable(CreateStmt *stmt, char relkind, TupleDesc desc, Oid relationId, O
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("cannot set colocated true on a non-colocated"
 								" database")));
-			/* The following break is fine because there should only be one
-			 * colocated reloption at this point due to checks in
-			 * parseRelOptions */
-			break;
 		}
+
+		if (strcmp(def->defname, "tablegroup") == 0)
+		{
+			tablegroup_name = defGetString(def);
+		}
+	}
+
+	if (tablegroup_name && colocated) {
+		ereport(ERROR,
+					  (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 		 errmsg("cannot use \'colocated=true/false\' with tablegroup")));
+	}
+
+	Oid tablegroupId;
+	/* Select tablegroup to use.  If not specified, InvalidOid. */
+	if (tablegroup_name)
+	{
+		if (MyDatabaseColocated)
+				ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 			 errmsg("cannot use tablegroups in a colocated database")));
+		else
+			tablegroupId = get_tablegroup_oid(tablegroup_name, false);
+	}
+	else
+	{
+		tablegroupId = InvalidOid;
+	}
+
+	/* Check permissions for tablegroup */
+	if (OidIsValid(tablegroupId) && !pg_tablegroup_ownercheck(tablegroupId, GetUserId()))
+	{
+		AclResult	aclresult;
+
+		aclresult = pg_tablegroup_aclcheck(tablegroupId, GetUserId(), ACL_CREATE);
+		if (aclresult != ACLCHECK_OK)
+				aclcheck_error(aclresult, OBJECT_TABLEGROUP,
+						   			 	 get_tablegroup_name(tablegroupId));
 	}
 
 	HandleYBStatus(YBCPgNewCreateTable(db_name,
@@ -698,6 +735,7 @@ YBCCreateIndex(const char *indexName,
 
 	/* Check reloptions. */
 	ListCell	*opt_cell;
+	char *tablegroup_name = NULL;
 	foreach(opt_cell, untransformRelOptions(reloptions))
 	{
 		DefElem *def = (DefElem *) lfirst(opt_cell);
@@ -709,6 +747,43 @@ YBCCreateIndex(const char *indexName,
 					 errmsg("cannot set option \"%s\" on index",
 							def->defname)));
 		}
+
+		if (strcmp(def->defname, "tablegroup") == 0)
+		{
+
+			tablegroup_name = defGetString(def);
+		}
+	}
+
+	/* Select tablegroup to use.  If not specified, default to the
+	 * tablegroup of the indexed table. If no tablegroup for the indexed table
+	 * then set to InvalidOid (no tablegroup).
+	 */
+	if (tablegroup_name && colocated) {
+		ereport(ERROR,
+					  (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 		 errmsg("cannot use \'colocated=true/false\' with tablegroup")));
+	}
+
+	Oid tablegroupId;
+	if (tablegroup_name)
+	{
+		tableGroupId = get_tablegroup_oid(tablegroup_name, false);
+	}
+	else
+	{
+		tableGroupId = get_table_tablegroup_oid(rel->relid);
+	}
+
+	/* Check permissions for tablegroup */
+	if (OidIsValid(tableGroupId) && !pg_tablegroup_ownercheck(tableGroupId, GetUserId()))
+	{
+		AclResult	aclresult;
+
+		aclresult = pg_tablegroup_aclcheck(tableGroupId, GetUserId(), ACL_CREATE);
+		if (aclresult != ACLCHECK_OK)
+				aclcheck_error(aclresult, OBJECT_TABLEGROUP,
+						   			 	 get_tablegroup_name(tableGroupId));
 	}
 
 	YBCPgStatement handle = NULL;

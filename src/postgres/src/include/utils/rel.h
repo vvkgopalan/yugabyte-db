@@ -265,6 +265,7 @@ typedef struct StdRdOptions
 	bool		user_catalog_table; /* use as an additional catalog relation */
 	int			parallel_workers;	/* max number of parallel workers */
 	bool		colocated;
+	char 	 *tablegroup;
 } StdRdOptions;
 
 #define HEAP_MIN_FILLFACTOR			10

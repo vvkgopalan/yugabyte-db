@@ -1140,8 +1140,10 @@ relation_open(Oid relationId, LOCKMODE lockmode)
 	/* The relcache does all the real work... */
 	r = RelationIdGetRelation(relationId);
 
-	if (!RelationIsValid(r))
+	if (!RelationIsValid(r)) {
+		elog(WARNING, "STACK TRACE: %s", YBCGetStackTrace());
 		elog(ERROR, "could not open relation with OID %u", relationId);
+	}
 
 	/* Make note that we've accessed a temporary relation */
 	if (RelationUsesLocalBuffers(r))

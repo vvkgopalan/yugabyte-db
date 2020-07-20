@@ -74,6 +74,35 @@
 #include "utils/tqual.h"
 #include "utils/varlena.h"
 
+#include "pg_yb_utils.h"
+
+ColocationVersionType colocation_version_type = COLOCATION_VERSION_UNSET;
+
+static ColocationVersionType YBCGetColocationVersionType();
+/* Local utility methods. */
+ColocationVersionType YBCGetColocationVersionType() {
+
+  if (colocation_version_type == COLOCATION_VERSION_UNSET)
+  {
+    /* First call, need to set the version type. */
+    bool tablegroup_table_exists = false;
+    HandleYBStatus(YBCPgTableExists(TemplateDbOid,
+                                    TableGroupRelationId,
+                                    &tablegroup_table_exists));
+
+    if (tablegroup_table_exists)
+    {
+      colocation_version_type = COLOCATION_VERSION_TABLEGROUP;
+    }
+    else
+    {
+      colocation_version_type = COLOCATION_VERSION_DATABASE;
+    }
+  }
+
+  return colocation_version_type;
+}
+
 /*
  * Create a table group.
  */
@@ -86,6 +115,12 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 	HeapTuple	tuple;
 	Oid				tablegroupoid;
 	Oid 			ownerId;
+
+	if (YBCGetColocationVersionType() != COLOCATION_VERSION_TABLEGROUP) {
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Tablegroup system catalog does not exist.")));
+	}
 
 	/* If not superuser check privileges */
 	if (!superuser())
@@ -155,15 +190,20 @@ DropTableGroup(DropTableGroupStmt *stmt)
 {
 	char *tablegroupname = stmt->tablegroupname;
 	HeapScanDesc scandesc;
-	SysScanDesc  class_scandesc = NULL;
+	HeapScanDesc  class_scandesc;
 	Relation		 rel;
 	Relation 		 class_rel;
 	HeapTuple		 tuple;
 	HeapTuple 	 class_tuple;
 	ScanKeyData  entry[1];
-	//ScanKeyData  class_entry[1];
+	ScanKeyData  class_entry[1];
 	Oid					 tablegroupoid;
 
+	if (YBCGetColocationVersionType() != COLOCATION_VERSION_TABLEGROUP) {
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Tablegroup system catalog does not exist.")));
+	}
 	/*
 	 * Find the target tuple
 	 */
@@ -196,20 +236,14 @@ DropTableGroup(DropTableGroupStmt *stmt)
 										 tablegroupname);
 	}
 
-	// Scan uses pg_class_tblgrp_index since pg_class can grow large
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
-	/*ScanKeyInit(&class_entry[0],
-							Anum_pg_class_reltablegroup,
+	ScanKeyInit(&class_entry[0],
+							Anum_pg_class_reloptions,
 							BTEqualStrategyNumber, F_OIDEQ,
-							ObjectIdGetDatum(tablegroupoid));*/
-	/*class_scandesc = systable_beginscan(class_rel,
-									    								ClassTblgrpIndexId,
-									    								true,
-									    								NULL,
-									    								1,
-									    								class_entry);*/
-	class_tuple = systable_getnext(class_scandesc);
-	systable_endscan(class_scandesc);
+							ObjectIdGetDatum(tablegroupoid));
+	class_scandesc = heap_beginscan_catalog(class_rel, 1, class_entry);
+	class_tuple = heap_getnext(class_scandesc, ForwardScanDirection);
+	heap_endscan(class_scandesc);
 	heap_close(class_rel, NoLock);
 
 	if (HeapTupleIsValid(class_tuple))
@@ -251,6 +285,12 @@ get_tablegroup_oid(const char *tablegroupname, bool missing_ok)
 	HeapScanDesc scandesc;
 	HeapTuple		 tuple;
 	ScanKeyData  entry[1];
+
+	if (YBCGetColocationVersionType() != COLOCATION_VERSION_TABLEGROUP) {
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Tablegroup system catalog does not exist.")));
+	}
 
 	/*
 	 * Search pg_tablegroup.  We use a heapscan here even though there is an
@@ -296,6 +336,12 @@ get_table_tablegroup_oid(Oid table_oid)
 	HeapTuple		tuple;
 	ScanKeyData entry[1];
 
+	if (YBCGetColocationVersionType() != COLOCATION_VERSION_TABLEGROUP) {
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Tablegroup system catalog does not exist.")));
+	}
+
 	/*
 	 * Search pg_class using an indexed lookup as pg_class can grow large.
 	 * Using pg_class_oid_index
@@ -314,9 +360,14 @@ get_table_tablegroup_oid(Oid table_oid)
 	heap_close(rel, NoLock);
 
 	/* We assume that there can be at most one matching tuple */
-	/*if (HeapTupleIsValid(tuple))
-		result = ((Form_pg_class) GETSTRUCT(tuple))->reltablegroup;
-	else*/
+	if (HeapTupleIsValid(tuple))
+		StdRdOptions *relopts;
+		relopts = (StdRdOptions *) tuple->rd_options;
+		if (relopts && relopts->tablegroup)
+			result = get_tablegroup_oid(relopts->tablegroup, true);
+		else
+			result = InvalidOid;
+	else
 		result = InvalidOid;
 
 	return result;
@@ -335,6 +386,12 @@ get_tablegroup_name(Oid grp_oid)
 	HeapScanDesc scandesc;
 	HeapTuple		 tuple;
 	ScanKeyData  entry[1];
+
+	if (YBCGetColocationVersionType() != COLOCATION_VERSION_TABLEGROUP) {
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Tablegroup system catalog does not exist.")));
+	}
 
 	/*
 	 * Search pg_tablegroup.  We use a heapscan here even though there is an
@@ -373,13 +430,19 @@ void
 RemoveTableGroupById(Oid grp_oid)
 {
 	Relation		 pg_tblgrp_rel;
-	SysScanDesc  sscan_class = NULL;
+	HeapScanDesc  sscan_class;
 	HeapScanDesc scandesc;
 	ScanKeyData  skey[1];
-	//ScanKeyData  class_entry[1];
+	ScanKeyData  class_entry[1];
 	HeapTuple		 tuple;
 	HeapTuple    class_tuple;
 	Relation		 class_rel;
+
+	if (YBCGetColocationVersionType() != COLOCATION_VERSION_TABLEGROUP) {
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Tablegroup system catalog does not exist.")));
+	}
 
 	pg_tblgrp_rel = heap_open(TableGroupRelationId, RowExclusiveLock);
 
@@ -402,16 +465,14 @@ RemoveTableGroupById(Oid grp_oid)
 										grp_oid)));
 	}
 
-	// Scan uses pg_class_tblgrp_index since pg_class can grow large
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
-	/*ScanKeyInit(&class_entry[0],
-							Anum_pg_class_reltablegroup,
+	ScanKeyInit(&class_entry[0],
+							Anum_pg_class_reloptions,
 							BTEqualStrategyNumber, F_OIDEQ,
-							ObjectIdGetDatum(grp_oid));*/
-	/*sscan_class = systable_beginscan(class_rel, ClassTblgrpIndexId, true,
-								     							 NULL, 1, class_entry);*/
-	class_tuple = systable_getnext(sscan_class);
-	systable_endscan(sscan_class);
+							ObjectIdGetDatum(grp_oid));
+	sscan_class = heap_beginscan_catalog(class_rel, 1, class_entry);
+	class_tuple = heap_getnext(sscan_class, ForwardScanDirection);
+	heap_endscan(sscan_class);
 	heap_close(class_rel, NoLock);
 
 	if (HeapTupleIsValid(class_tuple))
@@ -439,3 +500,14 @@ RemoveTableGroupById(Oid grp_oid)
 	heap_close(pg_tblgrp_rel, NoLock);
 }
 
+void
+validateTablegroupName(const char *value)
+{
+	if (value == NULL)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid value for \"tablegroup\" option"),
+				 errdetail("Must provide a tablegroup name.")));
+	}
+}

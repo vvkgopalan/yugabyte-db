@@ -280,8 +280,7 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 										   true,
 										   true,
 										   InvalidOid,
-										   NULL,
-										   InvalidOid);
+										   NULL);
 	Assert(toast_relid != InvalidOid);
 
 	/* make the toast relation visible, else heap_open will fail */
@@ -340,7 +339,7 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 				 rel->rd_rel->reltablespace,
 				 collationObjectId, classObjectId, coloptions, (Datum) 0,
 				 INDEX_CREATE_IS_PRIMARY, 0, true, true, NULL, NULL,
-				 true /* skip_index_backfill */, InvalidOid);
+				 true /* skip_index_backfill */);
 
 	heap_close(toast_rel, NoLock);
 

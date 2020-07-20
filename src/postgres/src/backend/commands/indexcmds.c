@@ -344,7 +344,6 @@ DefineIndex(Oid relationId,
 	Oid			accessMethodId;
 	Oid			namespaceId;
 	Oid			tablespaceId;
-	Oid 		 tableGroupId;
 	Oid			createdConstraintId = InvalidOid;
 	List	   *indexColNames;
 	List	   *allIndexParams;
@@ -565,24 +564,6 @@ DefineIndex(Oid relationId,
 		/* note InvalidOid is OK in this case */
 	}
 
-	/* Select tablegroup to use.  If not specified, default to the
-	 * tablegroup of the indexed table. If no tablegroup for the indexed table
-	 * then set to InvalidOid (no tablegroup).
-	 */
-	bool flag = false;
-	if (stmt->tablegroupname)
-	{
-		tableGroupId = get_tablegroup_oid(stmt->tablegroupname, false);
-	}
-	else if (flag)
-	{
-		tableGroupId = get_table_tablegroup_oid(relationId);
-	}
-	else
-	{
-		tableGroupId = InvalidOid;
-	}
-
 	/* Check tablespace permissions */
 	if (check_rights &&
 		OidIsValid(tablespaceId) && tablespaceId != MyDatabaseTableSpace)
@@ -594,17 +575,6 @@ DefineIndex(Oid relationId,
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_TABLESPACE,
 						   get_tablespace_name(tablespaceId));
-	}
-
-	/* Check permissions for tablegroup */
-	if (OidIsValid(tableGroupId) && !pg_tablegroup_ownercheck(tableGroupId, GetUserId()))
-	{
-		AclResult	aclresult;
-
-		aclresult = pg_tablegroup_aclcheck(tableGroupId, GetUserId(), ACL_CREATE);
-		if (aclresult != ACLCHECK_OK)
-				aclcheck_error(aclresult, OBJECT_TABLEGROUP,
-						   			 	 get_tablegroup_name(tableGroupId));
 	}
 
 	/*
@@ -971,7 +941,7 @@ DefineIndex(Oid relationId,
 					 flags, constr_flags,
 					 allowSystemTableMods, !check_rights,
 					 &createdConstraintId, stmt->split_options,
-					 !stmt->concurrent, tableGroupId);
+					 !stmt->concurrent);
 
 	ObjectAddressSet(address, RelationRelationId, indexRelationId);
 

@@ -1158,7 +1158,7 @@ get_object_address_unqualified(ObjectType objtype,
 			break;
 		case OBJECT_TABLEGROUP:
 			address.classId = TableGroupRelationId;
-			address.objectId = InvalidOid; //get_tablegroup_oid(name, missing_ok);
+			address.objectId = get_tablegroup_oid(name, missing_ok);
 			address.objectSubId = 0;
 			break;
 		case OBJECT_TABLESPACE:
@@ -3310,7 +3310,7 @@ getObjectDescription(const ObjectAddress *object)
 			{
 				char	   *tblgroup;
 				tblgroup = NULL;
-				//tblgroup = get_tablegroup_name(object->objectId);
+				tblgroup = get_tablegroup_name(object->objectId);
 				if (!tblgroup)
 					elog(ERROR, "cache lookup failed for tablegroup %u",
 						 object->objectId);
@@ -4869,7 +4869,7 @@ getObjectIdentityParts(const ObjectAddress *object,
 			{
 				char	   *tblgroup;
 				tblgroup = NULL;
-				//tblgroup = get_tablegroup_name(object->objectId);
+				tblgroup = get_tablegroup_name(object->objectId);
 				if (!tblgroup)
 					elog(ERROR, "cache lookup failed for tablegroup %u",
 						 object->objectId);

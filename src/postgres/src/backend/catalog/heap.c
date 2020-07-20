@@ -261,8 +261,7 @@ heap_create(const char *relname,
 			char relpersistence,
 			bool shared_relation,
 			bool mapped_relation,
-			bool allow_system_table_mods,
-			Oid  reltablegroup)
+			bool allow_system_table_mods)
 {
 	bool		create_storage;
 	Relation	rel;
@@ -364,8 +363,7 @@ heap_create(const char *relname,
 									 shared_relation,
 									 mapped_relation,
 									 relpersistence,
-									 relkind,
-									 reltablegroup);
+									 relkind);
 
 	/*
 	 * No need to create local storage for YB Tables as YugaByte will handle it.
@@ -833,7 +831,6 @@ InsertPgClassTuple(Relation pg_class_desc,
 	values[Anum_pg_class_relrewrite - 1] = ObjectIdGetDatum(rd_rel->relrewrite);
 	values[Anum_pg_class_relfrozenxid - 1] = TransactionIdGetDatum(rd_rel->relfrozenxid);
 	values[Anum_pg_class_relminmxid - 1] = MultiXactIdGetDatum(rd_rel->relminmxid);
-	//values[Anum_pg_class_reltablegroup - 1] = ObjectIdGetDatum(rd_rel->reltablegroup);
 	if (relacl != (Datum) 0)
 		values[Anum_pg_class_relacl - 1] = relacl;
 	else
@@ -1065,8 +1062,7 @@ heap_create_with_catalog(const char *relname,
 						 bool allow_system_table_mods,
 						 bool is_internal,
 						 Oid relrewrite,
-						 ObjectAddress *typaddress,
-						 Oid reltablegroup)
+						 ObjectAddress *typaddress)
 {
 	Relation	pg_class_desc;
 	Relation	new_rel_desc;
@@ -1212,8 +1208,7 @@ heap_create_with_catalog(const char *relname,
 							   relpersistence,
 							   shared_relation,
 							   mapped_relation,
-							   allow_system_table_mods,
-							   reltablegroup);
+							   allow_system_table_mods);
 
 	Assert(relid == RelationGetRelid(new_rel_desc));
 
