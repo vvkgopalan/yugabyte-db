@@ -74,6 +74,7 @@
 #include "utils/tqual.h"
 #include "utils/varlena.h"
 
+#include "yb/yql/pggate/ybc_pggate.h"
 #include "pg_yb_utils.h"
 
 ColocationVersionType colocation_version_type = COLOCATION_VERSION_UNSET;
@@ -86,7 +87,7 @@ ColocationVersionType YBCGetColocationVersionType() {
   {
     /* First call, need to set the version type. */
     bool tablegroup_table_exists = false;
-    HandleYBStatus(YBCPgTableExists(TemplateDbOid,
+    HandleYBStatus(YBCPgTableExists(MyDatabaseId,
                                     TableGroupRelationId,
                                     &tablegroup_table_exists));
 
@@ -118,8 +119,8 @@ CreateTableGroup(CreateTableGroupStmt *stmt)
 
 	if (YBCGetColocationVersionType() != COLOCATION_VERSION_TABLEGROUP) {
 		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("Tablegroup system catalog does not exist.")));
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 		 errmsg("Tablegroup system catalog does not exist.")));
 	}
 
 	/* If not superuser check privileges */
@@ -236,9 +237,10 @@ DropTableGroup(DropTableGroupStmt *stmt)
 										 tablegroupname);
 	}
 
+	// Search reloptions
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
 	ScanKeyInit(&class_entry[0],
-							Anum_pg_class_reloptions,
+							Anum_pg_class_reltablespace,
 							BTEqualStrategyNumber, F_OIDEQ,
 							ObjectIdGetDatum(tablegroupoid));
 	class_scandesc = heap_beginscan_catalog(class_rel, 1, class_entry);
@@ -361,12 +363,7 @@ get_table_tablegroup_oid(Oid table_oid)
 
 	/* We assume that there can be at most one matching tuple */
 	if (HeapTupleIsValid(tuple))
-		StdRdOptions *relopts;
-		relopts = (StdRdOptions *) tuple->rd_options;
-		if (relopts && relopts->tablegroup)
-			result = get_tablegroup_oid(relopts->tablegroup, true);
-		else
-			result = InvalidOid;
+		result = InvalidOid;
 	else
 		result = InvalidOid;
 
@@ -465,9 +462,10 @@ RemoveTableGroupById(Oid grp_oid)
 										grp_oid)));
 	}
 
+	// Search reloptions
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
 	ScanKeyInit(&class_entry[0],
-							Anum_pg_class_reloptions,
+							Anum_pg_class_reltablespace,
 							BTEqualStrategyNumber, F_OIDEQ,
 							ObjectIdGetDatum(grp_oid));
 	sscan_class = heap_beginscan_catalog(class_rel, 1, class_entry);

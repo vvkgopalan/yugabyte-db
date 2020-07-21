@@ -759,7 +759,7 @@ YBCCreateIndex(const char *indexName,
 	 * tablegroup of the indexed table. If no tablegroup for the indexed table
 	 * then set to InvalidOid (no tablegroup).
 	 */
-	if (tablegroup_name && colocated) {
+	if (tablegroup_name && MyDatabaseColocated) {
 		ereport(ERROR,
 					  (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 		 errmsg("cannot use \'colocated=true/false\' with tablegroup")));
@@ -768,22 +768,22 @@ YBCCreateIndex(const char *indexName,
 	Oid tablegroupId;
 	if (tablegroup_name)
 	{
-		tableGroupId = get_tablegroup_oid(tablegroup_name, false);
+		tablegroupId = get_tablegroup_oid(tablegroup_name, false);
 	}
 	else
 	{
-		tableGroupId = get_table_tablegroup_oid(rel->relid);
+		tablegroupId = get_table_tablegroup_oid(rel->rd_id);
 	}
 
 	/* Check permissions for tablegroup */
-	if (OidIsValid(tableGroupId) && !pg_tablegroup_ownercheck(tableGroupId, GetUserId()))
+	if (OidIsValid(tablegroupId) && !pg_tablegroup_ownercheck(tablegroupId, GetUserId()))
 	{
 		AclResult	aclresult;
 
-		aclresult = pg_tablegroup_aclcheck(tableGroupId, GetUserId(), ACL_CREATE);
+		aclresult = pg_tablegroup_aclcheck(tablegroupId, GetUserId(), ACL_CREATE);
 		if (aclresult != ACLCHECK_OK)
 				aclcheck_error(aclresult, OBJECT_TABLEGROUP,
-						   			 	 get_tablegroup_name(tableGroupId));
+						   			 	 get_tablegroup_name(tablegroupId));
 	}
 
 	YBCPgStatement handle = NULL;
