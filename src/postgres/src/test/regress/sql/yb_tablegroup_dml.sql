@@ -14,21 +14,19 @@ CREATE TABLEGROUP tg_test2;
 
 CREATE TABLE tab_nonkey (a INT) TABLEGROUP tg_test1;
 \d tab_nonkey
+-- Hash partitioned will fail
 CREATE TABLE tab_key (a INT PRIMARY KEY) TABLEGROUP tg_test1;
 \d tab_key
-CREATE TABLE tab_range (a INT, PRIMARY KEY (a ASC)) tg_test1;
-CREATE TABLE tab_range_nonkey (a INT, b INT, PRIMARY KEY (a ASC)) TABLEGROUP tg_test2;
+CREATE TABLE tab_range (a INT, PRIMARY KEY (a ASC)) TABLEGROUP tg_test1;
+CREATE TABLE tab_range_nonkey (a INT, b INT, PRIMARY KEY (a ASC)) TABLEGROUP tg_test1;
 -- do not use tablegroup
 CREATE TABLE tab_nonkey_noco (a INT);
--- multi column primary key table
-CREATE TABLE tab_range_range (a INT, b INT, PRIMARY KEY (a, b DESC)) TABLEGROUP tg_test2;
 CREATE TABLE tab_range_colo (a INT, PRIMARY KEY (a ASC)) TABLEGROUP tg_test2;
 
 INSERT INTO tab_range (a) VALUES (0), (1), (2);
 INSERT INTO tab_range (a, b) VALUES (0, '0'); -- fail
 INSERT INTO tab_range_nonkey (a, b) VALUES (0, '0'), (1, '1');
 INSERT INTO tab_nonkey_noco (a) VALUES (0), (1), (2), (3);
-INSERT INTO tab_range_range (a, b) VALUES (0, 0), (0, 1), (1, 0), (1, 1);
 INSERT INTO tab_range_colo (a) VALUES (0), (1), (2), (3);
 
 SELECT * FROM tab_range;
@@ -36,7 +34,6 @@ SELECT * FROM tab_range WHERE a = 2;
 SELECT * FROM tab_range WHERE n = '0'; -- fail
 SELECT * FROM tab_range_nonkey;
 SELECT * FROM tab_nonkey_noco ORDER BY a ASC;
-SELECT * FROM tab_range_range;
 SELECT * FROM tab_range_colo;
 
 BEGIN;
@@ -52,9 +49,9 @@ INSERT INTO tab_range_colo VALUES (6), (6);
 
 -- CREATE INDEX
 
--- table with index
-CREATE TABLE tab_range_nonkey2 (a INT, b INT, PRIMARY KEY (a ASC));
-CREATE INDEX idx_range ON tab_range_nonkey2 (a);
+-- table with explicit tablegroup for index
+CREATE TABLE tab_range_nonkey2 (a INT, b INT, PRIMARY KEY (a ASC)) TABLEGROUP tg_test1;
+CREATE INDEX idx_range ON tab_range_nonkey2 (a) TABLEGROUP tg_test1;
 \d tab_range_nonkey2
 INSERT INTO tab_range_nonkey2 (a, b) VALUES (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
 EXPLAIN (COSTS OFF) SELECT * FROM tab_range_nonkey2 WHERE a = 1;
@@ -64,17 +61,17 @@ SELECT * FROM tab_range_nonkey2;
 DELETE FROM tab_range_nonkey2 WHERE a > 3;
 SELECT * FROM tab_range_nonkey2;
 
--- colocated table with non-colocated index
-CREATE TABLE tab_range_nonkey3 (a INT, b INT, PRIMARY KEY (a ASC));
-CREATE INDEX idx_range_colo ON tab_range_nonkey3 (a) WITH (colocated = true);
+-- table in tablegroup with default index tablegroup
+CREATE TABLE tab_range_nonkey3 (a INT, b INT, PRIMARY KEY (a ASC)) TABLEGROUP tg_test1;
+CREATE INDEX idx_range_colo ON tab_range_nonkey3 (a);
 
--- colocated table with colocated index
+-- table with no tablegroup (with index having tablegroup)
 CREATE TABLE tab_range_nonkey4 (a INT, b INT, PRIMARY KEY (a ASC));
-CREATE INDEX idx_range_noco ON tab_range_nonkey4 (a) WITH (colocated = false);
+CREATE INDEX idx_range_noco ON tab_range_nonkey4 (a) TABLEGROUP tg_test1;
 
--- non-colocated table with index
-CREATE TABLE tab_range_nonkey_noco (a INT, b INT, PRIMARY KEY (a ASC)) WITH (colocated = false);
-CREATE INDEX idx_range2 ON tab_range_nonkey_noco (a);
+-- table with index in a different tablegroup
+CREATE TABLE tab_range_nonkey_noco (a INT, b INT, PRIMARY KEY (a ASC)) TABLEGROUP tg_test1;
+CREATE INDEX idx_range2 ON tab_range_nonkey_noco (a) TABLEGROUP tg_test2;
 INSERT INTO tab_range_nonkey_noco (a, b) VALUES (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
 EXPLAIN (COSTS OFF) SELECT * FROM tab_range_nonkey_noco WHERE a = 1;
 SELECT * FROM tab_range_nonkey_noco WHERE a = 1;
@@ -82,15 +79,6 @@ UPDATE tab_range_nonkey_noco SET b = b + 1 WHERE a > 3;
 SELECT * FROM tab_range_nonkey_noco;
 DELETE FROM tab_range_nonkey_noco WHERE a > 3;
 SELECT * FROM tab_range_nonkey_noco;
-
--- more tables and indexes
-CREATE TABLE tab_range_nonkey_noco2 (a INT, b INT, PRIMARY KEY (a ASC)) WITH (colocated = false);
-CREATE INDEX idx_range3 ON tab_range_nonkey_noco2 (a);
-INSERT INTO tab_range_nonkey_noco2 (a, b) VALUES (0, 0);
-CREATE TABLE tab_range_nonkey_noco3 (a INT, b INT, PRIMARY KEY (a ASC)) WITH (colocated = false);
-CREATE INDEX idx_range4 ON tab_range_nonkey_noco3 (a);
-CREATE TABLE tab_range_nonkey5 (a INT, b INT, PRIMARY KEY (a ASC));
-CREATE INDEX idx_range5 ON tab_range_nonkey5 (a);
 
 \dt
 \di
@@ -121,10 +109,6 @@ SELECT * FROM tab_nonkey_noco;
 TRUNCATE TABLE tab_range_nonkey2;
 SELECT * FROM tab_range_nonkey2;
 
--- truncate non-colocated table with explicit index
-TRUNCATE TABLE tab_range_nonkey_noco2;
-SELECT * FROM tab_range_nonkey_noco2;
-
 \dt
 \di
 
@@ -135,7 +119,7 @@ INSERT INTO tab_range_nonkey2 (a, b) VALUES (0, 0), (1, 1);
 SELECT * FROM tab_range;
 SELECT * FROM tab_range_nonkey2;
 
--- Alter colocated tables
+-- Alter tablegrouped tables
 ALTER TABLE tab_range ADD COLUMN x INT;
 ALTER TABLE tab_range_nonkey2 DROP COLUMN b;
 
@@ -160,24 +144,16 @@ SELECT * FROM tab_nonkey_noco;
 DROP TABLE tab_range_nonkey2_renamed;
 SELECT * FROM tab_range_nonkey2_renamed;
 
--- drop non-colocated table with explicit index
-DROP TABLE tab_range_nonkey_noco2;
-SELECT * FROM tab_range_nonkey_noco2;
-
 -- DROP INDEX
 
--- drop index on non-colocated table
+-- drop index on colocated table
 DROP INDEX idx_range2;
 EXPLAIN SELECT * FROM tab_range_nonkey_noco WHERE a = 1;
-
--- drop index on colocated table
-DROP INDEX idx_range5;
-EXPLAIN SELECT * FROM tab_range_nonkey5 WHERE a = 1;
 
 \dt
 \di
 
 -- drop database
 \c yugabyte
-DROP DATABASE colocation_test;
-\c colocation_test
+DROP DATABASE test_tablegroups;
+\c test_tablegroups
