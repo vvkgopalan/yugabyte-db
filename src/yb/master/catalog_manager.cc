@@ -2266,6 +2266,13 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
         req, schema, partition_schema, !tablets_exist && create_new_tablegroup /* create_tablets */,
         namespace_id, partitions, &index_info, &tablets, resp, &table));
 
+    // If the tablegroup_id for a CREATE TABLE statement is set, this section does one of two things
+    // (1) If the table is not a tablegroup parent table, it performs a lookup for the proper tablet
+    // to place the table on as a child table.
+    // (2) If the table is a tablegroup parent table, it creates a dummy tablet for the tablegroup
+    // along with updating the catalog manager maps.
+    // It additionally sets the table metadata (and tablet metadata if this is the parent table)
+    // to have the colocated property so we can take advantage of code reuse.
     if (req.has_tablegroup_id()) {
       table->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
       if (!create_new_tablegroup) {

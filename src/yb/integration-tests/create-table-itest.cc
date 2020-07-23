@@ -412,6 +412,93 @@ TEST_F(CreateTableITest, TableColocationRemoteBootstrapTest) {
   ASSERT_OK(WaitFor(dirs_exist, MonoDelta::FromSeconds(100), "Create data and wal directories"));
 }
 
+TEST_F(CreateTableITest, TablegroupRemoteBootstrapTest) {
+  const int kNumReplicas = 3;
+  string parent_table_id;
+  string tablet_id;
+  vector<string> ts_flags;
+  vector<string> master_flags;
+  string namespace_name = "tablegroup_test_namespace_name";
+  string tablegroup_name = "tablegroup_test_name";
+  TablegroupId tablegroup_id = "tablegroup_test_id";
+  string namespace_id;
+
+  ts_flags.push_back("--follower_unavailable_considered_failed_sec=3");
+  ASSERT_NO_FATALS(StartCluster(ts_flags, master_flags, kNumReplicas));
+
+  ASSERT_OK(
+      client_->CreateNamespace(namespace_name, YQL_DATABASE_PGSQL, "", "", "", boost::none, false));
+
+  {
+    auto namespaces = ASSERT_RESULT(client_->ListNamespaces(boost::none));
+    for (const auto& ns : namespaces) {
+      if (ns.name() == namespace_name) {
+        namespace_id = ns.id();
+        break;
+      }
+    }
+    ASSERT_FALSE(namespace_id.empty());
+  }
+
+  // For testing purposes - we are not using a valid PgsqlTablegroupId
+  ASSERT_OK(
+      client_->CreateTablegroup(namespace_name, namespace_id,
+                                tablegroup_name, tablegroup_id));
+
+  // Now want to ensure that the newly created tablegroup shows up in the list.
+  {
+    string tg_id;
+    auto tablegroups = ASSERT_RESULT(client_->ListTablegroups(namespace_name,
+                                                              tablegroup_name));
+    for (const auto& tg : tablegroups) {
+      if (tg.name() == tablegroup_name) {
+        tg_id = tg.id();
+        break;
+      }
+    }
+    ASSERT_FALSE(tg_id.empty());
+    parent_table_id = tg_id + master::kTablegroupParentTableIdSuffix;
+  }
+
+  {
+    google::protobuf::RepeatedPtrField<master::TabletLocationsPB> tablets;
+    ASSERT_OK(WaitFor(
+        [&]() -> bool {
+          EXPECT_OK(client_->GetTabletsFromTableId(parent_table_id, 0, &tablets));
+          return tablets.size() == 1;
+        },
+        MonoDelta::FromSeconds(30), "Create tablegroup tablet"));
+    tablet_id = tablets[0].tablet_id();
+  }
+
+  string rocksdb_dir = JoinPathSegments(
+      cluster_->data_root(), "ts-1", "yb-data", "tserver", "data", "rocksdb",
+      "table-" + parent_table_id, "tablet-" + tablet_id);
+  string wal_dir = JoinPathSegments(
+      cluster_->data_root(), "ts-1", "yb-data", "tserver", "wals", "table-" + parent_table_id,
+      "tablet-" + tablet_id);
+  std::function<Result<bool>()> dirs_exist = [&] {
+    return Env::Default()->FileExists(rocksdb_dir) && Env::Default()->FileExists(wal_dir);
+  };
+
+  ASSERT_OK(WaitFor(dirs_exist, MonoDelta::FromSeconds(30), "Create data and wal directories"));
+
+  // Stop a tablet server and create a new tablet server. This will trigger a remote bootstrap on
+  // the new tablet server.
+  cluster_->tablet_server(2)->Shutdown();
+  ASSERT_OK(cluster_->AddTabletServer());
+  ASSERT_OK(cluster_->WaitForTabletServerCount(4, MonoDelta::FromSeconds(20)));
+
+  // Remote bootstrap should create the correct tablet directory for the new tablet server.
+  rocksdb_dir = JoinPathSegments(
+      cluster_->data_root(), "ts-4", "yb-data", "tserver", "data", "rocksdb",
+      "table-" + parent_table_id, "tablet-" + tablet_id);
+  wal_dir = JoinPathSegments(
+      cluster_->data_root(), "ts-4", "yb-data", "tserver", "wals", "table-" + parent_table_id,
+      "tablet-" + tablet_id);
+  ASSERT_OK(WaitFor(dirs_exist, MonoDelta::FromSeconds(100), "Create data and wal directories"));
+}
+
 TEST_F(CreateTableITest, TestIsRaftLeaderMetric) {
   const int kNumReplicas = 3;
   const int kNumTablets = 1;

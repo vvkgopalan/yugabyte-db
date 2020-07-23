@@ -532,7 +532,7 @@ class TablegroupInfo : public RefCountedThreadSafe<TablegroupInfo>{
  public:
   explicit TablegroupInfo(TablegroupId tablegroup_id,
                           std::string tablegroup_name,
-                          NamespaceId ns_id);
+                          NamespaceId namespace_id);
 
   const std::string& id() const { return tablegroup_id_; }
   const std::string& name() const { return tablegroup_name_; }
