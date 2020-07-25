@@ -2211,7 +2211,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   scoped_refptr<TableInfo> table;
   vector<TabletInfo*> tablets;
   bool tablets_exist;
-  bool create_new_tablegroup = true;
+  bool tablegroup_tablets_exist = false;
 
   {
     std::lock_guard<LockType> l(lock_);
@@ -2259,11 +2259,12 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
         tablegroup_tablet_ids_map_.find(ns->id()) != tablegroup_tablet_ids_map_.end() &&
         tablegroup_tablet_ids_map_[ns->id()].find(req.tablegroup_id()) !=
         tablegroup_tablet_ids_map_[ns->id()].end()) {
-      create_new_tablegroup = false;
+      tablegroup_tablets_exist = true;
     }
     // If using tablegroups, tablets_exist will always be false.
     RETURN_NOT_OK(CreateTableInMemory(
-        req, schema, partition_schema, !tablets_exist && create_new_tablegroup /* create_tablets */,
+        req, schema, partition_schema,
+        !tablets_exist && !tablegroup_tablets_exist /* create_tablets */,
         namespace_id, partitions, &index_info, &tablets, resp, &table));
 
     // If the tablegroup_id for a CREATE TABLE statement is set, this section does one of two things
@@ -2275,7 +2276,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     // to have the colocated property so we can take advantage of code reuse.
     if (req.has_tablegroup_id()) {
       table->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
-      if (!create_new_tablegroup) {
+      if (tablegroup_tablets_exist) {
         scoped_refptr<TabletInfo> tablet =
             tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()];
         DSCHECK(
@@ -2337,7 +2338,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
   // They will get committed at the end of this function.
   // Sanity check: the tables and tablets should all be in "preparing" state.
   CHECK_EQ(SysTablesEntryPB::PREPARING, table->metadata().dirty().pb.state());
-  if (tablets_exist || (req.has_tablegroup_id() && !create_new_tablegroup)) {
+  if (tablets_exist || tablegroup_tablets_exist) {
     TRACE("Inserted new table and updating tablet info into CatalogManager maps");
     VLOG(1) << "Inserted new table and updating tablet info into "
                "CatalogManager maps";
@@ -2397,7 +2398,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     tablet->mutable_metadata()->CommitMutation();
   }
 
-  if ((colocated && tablets_exist) || (!create_new_tablegroup && req.has_tablegroup_id())) {
+  if ((colocated && tablets_exist) || (tablegroup_tablets_exist && req.has_tablegroup_id())) {
     auto call =
         std::make_shared<AsyncAddTableToTablet>(master_, AsyncTaskPool(), tablets[0], table);
     table->AddTask(call);

@@ -1282,7 +1282,7 @@ TEST_F(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(ColocatedTablegroups)) {
   ASSERT_FALSE(ASSERT_RESULT(client->TablegroupExists(kDatabaseName, kTablegroupAltName)));
 
   // The alt tablegroup tablet should be deleted after dropping the tablegroup.
-  bool tablet_found = true;
+  bool alt_tablet_found = true;
   int rpc_calls = 0;
   ASSERT_OK(WaitFor(
       [&] {
@@ -1291,11 +1291,11 @@ TEST_F(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(ColocatedTablegroups)) {
             tablegroup_alt_tablet_id,
             CoarseMonoClock::Now() + 30s,
             [&](const Result<client::internal::RemoteTabletPtr>& result) {
-              tablet_found = result.ok();
+              alt_tablet_found = result.ok();
               rpc_calls--;
             },
             client::UseCache::kFalse);
-        return !tablet_found;
+        return !alt_tablet_found;
       },
       30s, "Drop tablegroup"));
 
@@ -1327,7 +1327,7 @@ TEST_F(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(ColocatedTablegroups)) {
         client->TableExists(client::YBTableName(YQL_DATABASE_PGSQL, kDatabaseName, "foo_index1"))));
 
   // The original tablegroup tablet should be deleted after dropping the database.
-  tablet_found = true;
+  bool orig_tablet_found = true;
   rpc_calls = 0;
   ASSERT_OK(WaitFor(
       [&] {
@@ -1336,16 +1336,16 @@ TEST_F(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(ColocatedTablegroups)) {
             tablegroup_tablet_id,
             CoarseMonoClock::Now() + 30s,
             [&](const Result<client::internal::RemoteTabletPtr>& result) {
-              tablet_found = result.ok();
+              orig_tablet_found = result.ok();
               rpc_calls--;
             },
             client::UseCache::kFalse);
-        return !tablet_found;
+        return !orig_tablet_found;
       },
       30s, "Drop database with tablegroup"));
 
   // The second tablegroup tablet should also be deleted after dropping the database.
-  tablet_found = true;
+  bool second_tablet_found = true;
   rpc_calls = 0;
   ASSERT_OK(WaitFor(
       [&] {
@@ -1354,11 +1354,11 @@ TEST_F(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(ColocatedTablegroups)) {
             tablegroup_alt_tablet_id,
             CoarseMonoClock::Now() + 30s,
             [&](const Result<client::internal::RemoteTabletPtr>& result) {
-              tablet_found = result.ok();
+              second_tablet_found = result.ok();
               rpc_calls--;
             },
             client::UseCache::kFalse);
-        return !tablet_found;
+        return !second_tablet_found;
       },
       30s, "Drop database with tablegroup"));
 
