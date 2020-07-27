@@ -250,18 +250,13 @@ SELECT * FROM tab_range;
 (4 rows)
 
 DELETE FROM tab_range WHERE a = 2;
-TRUNCATE TABLE tab_range;
 SELECT * FROM tab_range;
  a
 ---
-(0 rows)
-
-INSERT INTO tab_range VALUES (2);
-SELECT * FROM tab_range;
- a
----
- 2
-(1 row)
+ 1
+ 4
+ 5
+(3 rows)
 
 TRUNCATE TABLE tab_range;
 -- truncate non-colocated table without index

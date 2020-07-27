@@ -95,9 +95,6 @@ INSERT INTO tab_range VALUES (1);
 INSERT INTO tab_range VALUES (2), (5);
 SELECT * FROM tab_range;
 DELETE FROM tab_range WHERE a = 2;
-TRUNCATE TABLE tab_range;
-SELECT * FROM tab_range;
-INSERT INTO tab_range VALUES (2);
 SELECT * FROM tab_range;
 
 TRUNCATE TABLE tab_range;
