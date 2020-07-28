@@ -1,0 +1,54 @@
+--
+-- Tests for altering tablegroups. Includes name / owner changes.
+-- Will eventually include tests on pulling tables out of tablegroups / altering the tablegroup of a table etc.
+--
+-- Test rename
+CREATE TABLEGROUP tgroup1;
+CREATE TABLEGROUP tgroup2;
+SELECT grpname FROM pg_tablegroup;
+ grpname
+---------
+ tgroup1
+ tgroup2
+(2 rows)
+
+ALTER TABLEGROUP tgroup1 RENAME TO tgroup_alt;
+SELECT grpname FROM pg_tablegroup;
+  grpname
+------------
+ tgroup_alt
+ tgroup2
+(2 rows)
+
+ALTER TABLEGROUP tgroup2 RENAME TO tgroup_alt; -- fail
+ERROR:  tablegroup "tgroup_alt" already exists
+ALTER TABLEGROUP tgroup2 RENAME TO tgroup2; -- fail
+ERROR:  tablegroup "tgroup2" already exists
+SELECT grpname FROM pg_tablegroup;
+  grpname
+------------
+ tgroup_alt
+ tgroup2
+(2 rows)
+
+ALTER TABLEGROUP tgroup_not_exists RENAME TO tgroup_not_exists; -- fail
+ERROR:  tablegroup "tgroup_not_exists" does not exist
+-- Test alter owner
+CREATE USER u1;
+CREATE USER u2;
+CREATE TABLEGROUP tgroup3 OWNER u1;
+CREATE TABLEGROUP tgroup4 OWNER u1;
+CREATE TABLEGROUP tgroup5;
+ALTER TABLEGROUP tgroup3 OWNER TO u2;
+ALTER TABLEGROUP tgroup4 OWNER TO u3; -- fail
+ERROR:  role "u3" does not exist
+ALTER TABLEGROUP tgroup_not_exists OWNER TO u1; -- fail
+ERROR:  tablegroup "tgroup_not_exists" does not exist
+\c yugabyte u1
+DROP TABLEGROUP tgroup3; -- fail
+ERROR:  must be owner of tablegroup tgroup3
+DROP TABLEGROUP tgroup4;
+ALTER TABLEGROUP tgroup5 OWNER TO u1; -- fail
+ERROR:  must be owner of tablegroup tgroup5
+\c yugabyte u2
+DROP TABLEGROUP tgroup3;
