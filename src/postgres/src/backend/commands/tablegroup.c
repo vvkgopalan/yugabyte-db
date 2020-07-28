@@ -343,10 +343,7 @@ get_tablegroup_oid(const char *tablegroupname, bool missing_ok)
 
 	/* We assume that there can be at most one matching tuple */
 	if (HeapTupleIsValid(tuple))
-	{
 		result = HeapTupleGetOid(tuple);
-		heap_freetuple(tuple);
-	}
 	else
 		result = InvalidOid;
 
