@@ -544,6 +544,9 @@ class TablegroupInfo : public RefCountedThreadSafe<TablegroupInfo>{
   bool HasChildTables() const;
   std::size_t NumChildTables() const;
 
+  // Operations to alter tablegroup info
+  void AlterName(const std::string& newname);
+
  private:
   friend class RefCountedThreadSafe<TablegroupInfo>;
   ~TablegroupInfo() = default;
@@ -551,7 +554,7 @@ class TablegroupInfo : public RefCountedThreadSafe<TablegroupInfo>{
   // The tablegroup ID is used in the catalog manager maps to look up the proper
   // tablet to add user tables to.
   const TablegroupId tablegroup_id_;
-  const std::string tablegroup_name_;
+  std::string tablegroup_name_;
   const NamespaceId namespace_id_;
 
   // Protects table_set_.

@@ -440,6 +440,13 @@ Status PgApiImpl::ExecDropTablegroup(PgStatement *handle) {
   return down_cast<PgDropTablegroup*>(handle)->Exec();
 }
 
+Status PgApiImpl::AlterTablegroupRenameTablegroup(const PgOid db_oid,
+                                                  const PgOid grp_oid,
+                                                  const char* oldname,
+                                                  const char *newname) {
+
+  return pg_session_->AlterTablegroupRename(db_oid, grp_oid, oldname, newname);
+}
 
 //--------------------------------------------------------------------------------------------------
 

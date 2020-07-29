@@ -366,9 +366,14 @@ class CatalogManager : public tserver::TabletPeerLookupIf {
                                   DeleteTablegroupResponsePB* resp,
                                   rpc::RpcContext* rpc);
 
+  CHECKED_STATUS AlterTablegroup(const AlterTablegroupRequestPB* req,
+                                 AlterTablegroupResponsePB* resp,
+                                 rpc::RpcContext* rpc);
+
   // List all the current tablegroups for a namespace.
   CHECKED_STATUS ListTablegroups(const ListTablegroupsRequestPB* req,
-                                 ListTablegroupsResponsePB* resp);
+                                 ListTablegroupsResponsePB* resp,
+                                 rpc::RpcContext* rpc);
 
   // Create a new User-Defined Type with the specified attributes.
   //

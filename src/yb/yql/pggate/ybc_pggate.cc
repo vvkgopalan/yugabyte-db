@@ -249,6 +249,13 @@ YBCStatus YBCPgExecDropTablegroup(YBCPgStatement handle) {
   return ToYBCStatus(pgapi->ExecDropTablegroup(handle));
 }
 
+YBCStatus YBCPgAlterTablegroupRenameTablegroup(YBCPgOid db_oid,
+                                               YBCPgOid grp_oid,
+                                               const char* oldname,
+                                               const char* newname) {
+  return ToYBCStatus(pgapi->AlterTablegroupRenameTablegroup(db_oid, grp_oid, oldname, newname));
+}
+
 // Statement Operations ----------------------------------------------------------------------------
 
 YBCStatus YBCPgClearBinds(YBCPgStatement handle) {

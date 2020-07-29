@@ -48,6 +48,8 @@ extern void YBCCreateTablegroup(Oid grpoid, const char *grpname);
 
 extern void YBCDropTablegroup(Oid grpoid, const char *grpname);
 
+extern void YBCRenameTablegroup(Oid grp_oid, const char* oldname, const char* newname);
+
 /*  Table Functions ----------------------------------------------------------------------------- */
 
 extern void YBCCreateTable(CreateStmt *stmt,

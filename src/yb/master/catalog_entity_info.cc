@@ -638,6 +638,10 @@ TablegroupInfo::TablegroupInfo(TablegroupId tablegroup_id, std::string tablegrou
                                tablegroup_name_(tablegroup_name),
                                namespace_id_(namespace_id) {}
 
+void TablegroupInfo::AlterName(const std::string& newname) {
+  tablegroup_name_ = newname;
+}
+
 void TablegroupInfo::AddChildTable(const TableId& table_id) {
   std::lock_guard<simple_spinlock> l(lock_);
   if (table_set_.find(table_id) != table_set_.end()) {

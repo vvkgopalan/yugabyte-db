@@ -566,6 +566,12 @@ RenameTablegroup(const char *oldname, const char *newname)
 	HeapScanDesc	scandesc;
 	ScanKeyData		entry[1];
 
+	if (!TablegroupCatalogExists) {
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Tablegroup system catalog does not exist.")));
+	}
+
 	/*
 	 * Look up the target tablegroup's OID, and get exclusive lock on it. We
 	 * need this for the same reasons as DROP TABLEGROUP.
@@ -614,11 +620,12 @@ RenameTablegroup(const char *oldname, const char *newname)
 	namestrcpy(&(((Form_pg_tablegroup) GETSTRUCT(newtup))->grpname), newname);
 	CatalogTupleUpdate(rel, &newtup->t_self, newtup);
 
-	// TODO: need to update TablegroupInfo on the docdb side. Check dbcommands for a reference on how to do so.
-
 	InvokeObjectPostAlterHook(TableGroupRelationId, tablegroupoid, 0);
 
 	ObjectAddressSet(address, TableGroupRelationId, tablegroupoid);
+
+	/* Update TablegroupInfo on the docdb side */
+	YBCRenameTablegroup(tablegroupoid, oldname, newname);
 
 	/*
 	 * Close pg_tablegroup, but keep lock till commit.
@@ -642,11 +649,12 @@ AlterTablegroupOwner(const char *grpname, Oid newOwnerId)
 	Form_pg_tablegroup	datForm;
 	ObjectAddress		address;
 
-	/*
-	 * Get the old tuple.  We don't need a lock on the database per se,
-	 * because we're not going to do anything that would mess up incoming
-	 * connections.
-	 */
+	if (!TablegroupCatalogExists) {
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Tablegroup system catalog does not exist.")));
+	}
+
 	rel = heap_open(TableGroupRelationId, RowExclusiveLock);
 	ScanKeyInit(&entry[0],
 				Anum_pg_tablegroup_grpname,

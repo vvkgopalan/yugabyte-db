@@ -435,6 +435,11 @@ class YBClient {
                                   const std::string& namespace_id,
                                   const std::string& tablegroup_id);
 
+  // Alter a tablegroup
+  CHECKED_STATUS AlterTablegroupRename(const std::string& grp_id,
+                                       const std::string& oldname,
+                                       const std::string& newname);
+
   // Check if the tablegroup given by 'tablegroup_name' exists.
   // Result value is set only on success.
   Result<bool> TablegroupExists(const std::string& namespace_name,

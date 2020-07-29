@@ -14,7 +14,15 @@ SELECT grpname FROM pg_tablegroup ORDER BY grpname;
  alter_tgroup2
 (2 rows)
 
-ALTER TABLEGROUP alter_tgroup1 RENAME TO alter_tgroup_alt;
+ALTER TABLEGROUP alter_tgroup1 RENAME TO alter_tgroup_try_alt;
+SELECT grpname FROM pg_tablegroup ORDER BY grpname;
+       grpname
+----------------------
+ alter_tgroup2
+ alter_tgroup_try_alt
+(2 rows)
+
+ALTER TABLEGROUP alter_tgroup_try_alt RENAME TO alter_tgroup_alt;
 SELECT grpname FROM pg_tablegroup ORDER BY grpname;
      grpname
 ------------------

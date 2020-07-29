@@ -179,6 +179,11 @@ class PgSession : public RefCountedThreadSafe<PgSession> {
                                 const PgOid database_oid,
                                 PgOid tablegroup_oid);
 
+  CHECKED_STATUS AlterTablegroupRename(const PgOid db_oid,
+                                       const PgOid grp_oid,
+                                       const string& oldname,
+                                       const string& newname);
+
   // API for schema operations.
   // TODO(neil) Schema should be a sub-database that have some specialized property.
   CHECKED_STATUS CreateSchema(const std::string& schema_name, bool if_not_exist);

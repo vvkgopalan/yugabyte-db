@@ -962,6 +962,15 @@ YBCRename(RenameStmt *stmt, Oid relationId)
 }
 
 void
+YBCRenameTablegroup(Oid grp_oid, const char* oldname, const char* newname)
+{
+	// Tablegroup goes through a different flow since there is no relation that can be opened
+	// on the PG side.
+	HandleYBStatus(YBCPgAlterTablegroupRenameTablegroup(MyDatabaseId, grp_oid,
+														oldname, newname));
+}
+
+void
 YBCDropIndex(Oid relationId)
 {
 	YBCPgStatement	handle;

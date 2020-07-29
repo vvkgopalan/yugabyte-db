@@ -755,6 +755,18 @@ Status PgSession::DropTablegroup(const string& tablegroup_name,
   return s;
 }
 
+Status PgSession::AlterTablegroupRename(const PgOid db_oid,
+                                        const PgOid grp_oid,
+                                        const string& oldname,
+                                        const string& newname) {
+  return client_->AlterTablegroupRename(GetPgsqlTablegroupId(db_oid, grp_oid),
+                                        oldname,
+                                        newname);
+  // No need to invalidate table cache since we are not altering the parent table. The name that the
+  // parent table has is solely dependent on the tablegroup ID since the tablegroup parent name
+  // is tablegroup ID + tablegroup name suffix
+}
+
 //--------------------------------------------------------------------------------------------------
 
 Result<PgTableDesc::ScopedRefPtr> PgSession::LoadTable(const PgObjectId& table_id) {

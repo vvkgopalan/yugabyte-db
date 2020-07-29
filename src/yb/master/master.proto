@@ -1470,6 +1470,17 @@ message DeleteTablegroupResponsePB {
   optional bytes parent_table_id = 2;
 }
 
+message AlterTablegroupRequestPB {
+  required string name = 1;
+  required bytes id = 2;
+  optional string new_name = 3;
+}
+
+message AlterTablegroupResponsePB {
+  // The error, if an error occurred with this request.
+  optional MasterErrorPB error = 1;
+}
+
 message ListTablegroupsRequestPB {
   optional bytes namespace_id = 1;
 }
@@ -1887,6 +1898,7 @@ service MasterService {
   // For Tablegroup:
   rpc CreateTablegroup(CreateTablegroupRequestPB) returns (CreateTablegroupResponsePB);
   rpc DeleteTablegroup(DeleteTablegroupRequestPB) returns (DeleteTablegroupResponsePB);
+  rpc AlterTablegroup(AlterTablegroupRequestPB) returns (AlterTablegroupResponsePB);
   rpc ListTablegroups(ListTablegroupsRequestPB) returns (ListTablegroupsResponsePB);
 
   // For Postgres:

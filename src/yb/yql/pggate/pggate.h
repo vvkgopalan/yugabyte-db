@@ -200,6 +200,11 @@ class PgApiImpl {
 
   CHECKED_STATUS ExecDropTablegroup(PgStatement *handle);
 
+  CHECKED_STATUS AlterTablegroupRenameTablegroup(const PgOid db_oid,
+                                                 const PgOid grp_oid,
+                                                 const char* oldname,
+                                                 const char *newname);
+
   //------------------------------------------------------------------------------------------------
   // Create, alter and drop table.
   CHECKED_STATUS NewCreateTable(const char *database_name,

@@ -85,6 +85,8 @@ using yb::master::CreateTablegroupRequestPB;
 using yb::master::CreateTablegroupResponsePB;
 using yb::master::DeleteTablegroupRequestPB;
 using yb::master::DeleteTablegroupResponsePB;
+using yb::master::AlterTablegroupRequestPB;
+using yb::master::AlterTablegroupResponsePB;
 using yb::master::ListTablegroupsRequestPB;
 using yb::master::ListTablegroupsResponsePB;
 using yb::master::GetNamespaceInfoRequestPB;
@@ -991,6 +993,23 @@ Status YBClient::DeleteTablegroup(const std::string& tablegroup_name,
                           resp.parent_table_id()));
 
   LOG(INFO) << "Deleted parent table for tablegroup " << tablegroup_name;
+  return Status::OK();
+}
+
+Status YBClient::AlterTablegroupRename(const std::string& grp_id,
+                                       const std::string& oldname,
+                                       const std::string& newname) {
+  AlterTablegroupRequestPB req;
+  AlterTablegroupResponsePB resp;
+
+  req.set_id(grp_id);
+  req.set_name(oldname);
+  req.set_new_name(newname);
+
+  CALL_SYNC_LEADER_MASTER_RPC(req, resp, AlterTablegroup);
+
+  LOG(INFO) << "Alterered tablegroup name for ID " << grp_id << " in TablegroupInfo from "
+            << oldname << " to " << newname;
   return Status::OK();
 }
 

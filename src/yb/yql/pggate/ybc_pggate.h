@@ -158,6 +158,12 @@ YBCStatus YBCPgNewDropTablegroup(const char *tablegroup_name,
                                  YBCPgStatement *handle);
 YBCStatus YBCPgExecDropTablegroup(YBCPgStatement handle);
 
+// Alter tablegroup
+YBCStatus YBCPgAlterTablegroupRenameTablegroup(YBCPgOid db_oid,
+                                               YBCPgOid grp_oid,
+                                               const char* oldname,
+                                               const char* newname);
+
 // TABLE -------------------------------------------------------------------------------------------
 // Create and drop table "database_name.schema_name.table_name()".
 // - When "schema_name" is NULL, the table "database_name.table_name" is created.

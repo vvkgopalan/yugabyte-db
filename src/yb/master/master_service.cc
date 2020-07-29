@@ -423,6 +423,12 @@ void MasterServiceImpl::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
   HandleIn(req, resp, &rpc, &CatalogManager::DeleteTablegroup);
 }
 
+void MasterServiceImpl::AlterTablegroup(const AlterTablegroupRequestPB* req,
+                                        AlterTablegroupResponsePB* resp,
+                                        rpc::RpcContext rpc) {
+  HandleIn(req, resp, &rpc, &CatalogManager::AlterTablegroup);
+}
+
 void MasterServiceImpl::ListTablegroups(const ListTablegroupsRequestPB* req,
                                         ListTablegroupsResponsePB* resp,
                                         rpc::RpcContext rpc) {

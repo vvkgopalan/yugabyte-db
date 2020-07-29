@@ -4861,8 +4861,40 @@ Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
   return s;
 }
 
+Status CatalogManager::AlterTablegroup(const AlterTablegroupRequestPB* req,
+                                       AlterTablegroupResponsePB* resp,
+                                       rpc::RpcContext* rpc) {
+  RETURN_NOT_OK(CheckOnline());
+
+  // Sanity check for PB fields
+  if (!req->has_id() || !req->has_name()) {
+    Status s = STATUS(InvalidArgument, "Improper ALTER TABLEGROUP request (missing fields).");
+    return SetupError(resp->mutable_error(), MasterErrorPB::INVALID_SCHEMA, s);
+  }
+
+  if (req->has_new_name()) {
+    SharedLock<LockType> catalog_lock(lock_);
+    if (tablegroup_ids_map_.find(req->id()) == tablegroup_ids_map_.end()) {
+      return STATUS(NotFound, "Tablegroups not found for tablegroup id: ", req->id());
+    }
+
+    auto tginfo = tablegroup_ids_map_[req->id()];
+    std::string oldname = tginfo->name();
+
+    // Something is wrong with our metadata if it is not consistent with PG's name.
+    if (oldname.compare(req->name()) != 0) {
+      LOG(WARNING) << "Inconsistent TablegroupInfo: PG tablegroup name " << req->name()
+                   << " does not match Catalog Manager tablegroup name " << oldname;
+    }
+
+    tginfo->AlterName(req->new_name());
+  }
+  return Status::OK();
+}
+
 Status CatalogManager::ListTablegroups(const ListTablegroupsRequestPB* req,
-                                       ListTablegroupsResponsePB* resp) {
+                                       ListTablegroupsResponsePB* resp,
+                                       rpc::RpcContext* rpc) {
   RETURN_NOT_OK(CheckOnline());
 
   SharedLock<LockType> l(lock_);

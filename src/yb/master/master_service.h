@@ -132,6 +132,10 @@ class MasterServiceImpl : public MasterServiceIf,
                         DeleteTablegroupResponsePB* resp,
                         rpc::RpcContext rpc) override;
 
+  void AlterTablegroup(const AlterTablegroupRequestPB* req,
+                       AlterTablegroupResponsePB* resp,
+                       rpc::RpcContext rpc) override;
+
   void ListTablegroups(const ListTablegroupsRequestPB* req,
                        ListTablegroupsResponsePB* resp,
                        rpc::RpcContext rpc) override;
