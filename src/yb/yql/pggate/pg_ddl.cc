@@ -123,8 +123,22 @@ PgCreateTablegroup::~PgCreateTablegroup() {
 }
 
 Status PgCreateTablegroup::Exec() {
-  return pg_session_->CreateTablegroup(database_name_, database_oid_,
-                                       tablegroup_name_, tablegroup_oid_);
+  Status s = pg_session_->CreateTablegroup(database_name_, database_oid_,
+                                           tablegroup_name_, tablegroup_oid_);
+
+  if (PREDICT_FALSE(!s.ok())) {
+    if (s.IsAlreadyPresent()) {
+      return STATUS(InvalidArgument, "Duplicate tablegroup.");
+    }
+    if (s.IsNotFound()) {
+      return STATUS(InvalidArgument, "Database not found", database_name_);
+    }
+    return STATUS_FORMAT(
+        InvalidArgument, "Invalid table definition: $0",
+        s.ToString(false /* include_file_and_line */, false /* include_code */));
+  }
+
+  return Status::OK();
 }
 
 PgDropTablegroup::PgDropTablegroup(PgSession::ScopedRefPtr pg_session,
@@ -141,7 +155,11 @@ PgDropTablegroup::~PgDropTablegroup() {
 }
 
 Status PgDropTablegroup::Exec() {
-  return pg_session_->DropTablegroup(tablegroup_name_, database_oid_, tablegroup_oid_);
+  Status s = pg_session_->DropTablegroup(tablegroup_name_, database_oid_, tablegroup_oid_);
+  if (s.ok() || s.IsNotFound()) {
+    return Status::OK();
+  }
+  return s;
 }
 
 //--------------------------------------------------------------------------------------------------

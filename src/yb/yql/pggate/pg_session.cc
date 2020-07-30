@@ -747,9 +747,11 @@ Status PgSession::CreateTablegroup(const string& database_name,
 Status PgSession::DropTablegroup(const string& tablegroup_name,
                                  const PgOid database_oid,
                                  PgOid tablegroup_oid) {
-  return client_->DeleteTablegroup(tablegroup_name,
-                                   GetPgsqlNamespaceId(database_oid),
-                                   GetPgsqlTablegroupId(database_oid, tablegroup_oid));
+  Status s = client_->DeleteTablegroup(tablegroup_name,
+                                       GetPgsqlNamespaceId(database_oid),
+                                       GetPgsqlTablegroupId(database_oid, tablegroup_oid));
+  table_cache_.erase(GetPgsqlTablegroupId(database_oid, tablegroup_oid) + ".tablegroup.parent.uuid");
+  return s;
 }
 
 //--------------------------------------------------------------------------------------------------

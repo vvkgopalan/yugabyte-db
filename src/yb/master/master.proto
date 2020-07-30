@@ -1452,6 +1452,9 @@ message CreateTablegroupRequestPB {
 message CreateTablegroupResponsePB {
   // The error, if an error occurred with this request.
   optional MasterErrorPB error = 1;
+
+  optional bytes parent_table_id = 2;
+  optional bytes parent_table_name = 3;
 }
 
 message DeleteTablegroupRequestPB {
@@ -1463,6 +1466,8 @@ message DeleteTablegroupRequestPB {
 message DeleteTablegroupResponsePB {
   // The error, if an error occurred with this request.
   optional MasterErrorPB error = 1;
+
+  optional bytes parent_table_id = 2;
 }
 
 message ListTablegroupsRequestPB {

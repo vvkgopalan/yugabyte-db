@@ -4765,6 +4765,7 @@ Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
   if (!req->has_id() || !req->has_namespace_id()
       || !req->has_namespace_name() || !req->has_name()) {
     Status s = STATUS(InvalidArgument, "Improper CREATE TABLEGROUP request (missing fields).");
+    return SetupError(resp->mutable_error(), MasterErrorPB::INVALID_SCHEMA, s);
   }
 
   // Use the tablegroup id as the prefix for the parent table id.
@@ -4786,8 +4787,16 @@ Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
   SchemaToPB(schema, ctreq.mutable_schema());
   ctreq.mutable_schema()->mutable_table_properties()->set_is_transactional(true);
 
-  // create a parent table, which will create the tablet.
+  // Create a parent table, which will create the tablet.
   Status s = CreateTable(&ctreq, &ctresp, rpc);
+  resp->set_parent_table_id(parent_table_id);
+  resp->set_parent_table_name(parent_table_name);
+
+  // Carry over error.
+  if (ctresp.has_error()) {
+    resp->mutable_error()->Swap(ctresp.mutable_error());
+  }
+
   // We do not lock here so it is technically possible that the table was already created.
   // If so, there is nothing to do so we just ignore the "AlreadyPresent" error.
   if (!s.ok() && !s.IsAlreadyPresent()) {
@@ -4795,12 +4804,13 @@ Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
     return s;
   }
 
+  // Update catalog manager maps
   SharedLock<LockType> catalog_lock(lock_);
   TRACE("Acquired catalog manager lock");
   TablegroupInfo *tg = new TablegroupInfo(req->id(), req->name(), req->namespace_name());
   tablegroup_ids_map_[req->id()] = tg;
 
-  return Status::OK();
+  return s;
 }
 
 Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
@@ -4812,6 +4822,7 @@ Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
   // Sanity check for PB fields
   if (!req->has_id() || !req->has_namespace_id()) {
     Status s = STATUS(InvalidArgument, "Improper DELETE TABLEGROUP request (missing fields).");
+    return SetupError(resp->mutable_error(), MasterErrorPB::INVALID_SCHEMA, s);
   }
 
   // Use the tablegroup id as the prefix for the parent table id.
@@ -4820,24 +4831,16 @@ Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
 
   dtreq.mutable_table()->set_table_name(parent_table_name);
   dtreq.mutable_table()->set_table_id(parent_table_id);
+  dtreq.set_is_index_table(false);
 
   Status s = DeleteTable(&dtreq, &dtresp, rpc);
+  resp->set_parent_table_id(parent_table_id);
 
-  // Handle special cases based on resp.error().
+  // Carry over error.
   if (dtresp.has_error()) {
-    // DROP TABLE has a case to retry - do I need to do something similar?
-    LOG_IF(DFATAL, s.ok()) << "Expecting error status if response has error: " <<
-        dtresp.error().code() << " Status: " << dtresp.error().status().ShortDebugString();
-    return StatusFromPB(dtresp.error().status());
-  } else {
-    // Check the status only if the response has no error.
-    RETURN_NOT_OK(s);
+    resp->mutable_error()->Swap(dtresp.mutable_error());
+    return s;
   }
-
-  // Spin until the table is fully deleted, if requested. Move this to the client.
-  /*if (wait && dtresp.has_table_id()) {
-    RETURN_NOT_OK(WaitForDeleteTableToFinish(client, resp.table_id(), deadline));
-  }*/
 
   // Perform map updates.
   SharedLock<LockType> catalog_lock(lock_);
@@ -4846,7 +4849,7 @@ Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
   tablegroup_tablet_ids_map_[req->namespace_id()].erase(req->id());
 
   LOG(INFO) << "Deleted table " << parent_table_name;
-  return Status::OK();
+  return s;
 }
 
 Status CatalogManager::ListTablegroups(const ListTablegroupsRequestPB* req,
@@ -4857,6 +4860,7 @@ Status CatalogManager::ListTablegroups(const ListTablegroupsRequestPB* req,
 
   if (!req->has_namespace_id()) {
     Status s = STATUS(InvalidArgument, "Improper ListTablegroups request (missing fields).");
+    return SetupError(resp->mutable_error(), MasterErrorPB::INVALID_SCHEMA, s);
   }
 
   if (tablegroup_tablet_ids_map_.find(req->namespace_id()) == tablegroup_tablet_ids_map_.end()) {
@@ -4868,6 +4872,7 @@ Status CatalogManager::ListTablegroups(const ListTablegroupsRequestPB* req,
     if (tablegroup_ids_map_.find(tgid) == tablegroup_ids_map_.end()) {
       LOG(WARNING) << "Tablegroup info in " << req->namespace_id()
                    << " not found for tablegroup id: " << tgid;
+      continue;
     }
     scoped_refptr<TablegroupInfo> tginfo = tablegroup_ids_map_[tgid];
 
@@ -6415,7 +6420,7 @@ void CatalogManager::DeleteTabletsAndSendRequests(const scoped_refptr<TableInfo>
     SharedLock<LockType> catalog_lock(lock_);
     colocated_tablet_ids_map_.erase(table->namespace_id());
   } else if (IsTablegroupParentTable(*table)) {
-    // In the case of dropped database, need to delete tablegroup info.
+    // In the case of dropped database/tablegroup parent table, need to delete tablegroup info.
     SharedLock<LockType> catalog_lock(lock_);
     for (auto tgroup : tablegroup_tablet_ids_map_[table->namespace_id()]) {
       tablegroup_ids_map_.erase(tgroup.first);

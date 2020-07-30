@@ -874,7 +874,72 @@ Status YBClient::CreateTablegroup(const std::string& namespace_name,
   req.set_namespace_id(namespace_id);
   req.set_namespace_name(namespace_name);
 
-  CALL_SYNC_LEADER_MASTER_RPC(req, resp, CreateTablegroup);
+  int attempts = 0;
+  auto deadline = CoarseMonoClock::Now() + default_admin_operation_timeout();
+
+  Status s = data_->SyncLeaderMasterRpc<CreateTablegroupRequestPB, CreateTablegroupResponsePB>(
+      deadline, req, &resp, &attempts, "CreateTablegroup", &MasterServiceProxy::CreateTablegroup);
+
+  // This case should not happen but need to validate contents since fields are optional in PB.
+  if (!resp.has_parent_table_id() || !resp.has_parent_table_name()) {
+    return STATUS(NotFound, "Parent table information not found in CREATE TABLEGROUP response.");
+  }
+
+  const YBTableName table_name(YQL_DATABASE_PGSQL, namespace_name, resp.parent_table_name());
+
+  // Handle special cases based on resp.error().
+  if (resp.has_error()) {
+    LOG_IF(DFATAL, s.ok()) << "Expecting error status if response has error: " <<
+        resp.error().code() << " Status: " << resp.error().status().ShortDebugString();
+
+    if (resp.error().code() == master::MasterErrorPB::OBJECT_ALREADY_PRESENT && attempts > 1) {
+      // If the table already exists and the number of attempts is >
+      // 1, then it means we may have succeeded in creating the
+      // table, but client didn't receive the successful
+      // response (e.g., due to failure before the successful
+      // response could be sent back, or due to a I/O pause or a
+      // network blip leading to a timeout, etc...)
+      YBTableInfo info;
+
+      // A fix for https://yugabyte.atlassian.net/browse/ENG-529:
+      // If we've been retrying table creation, and the table is now in the process is being
+      // created, we can sometimes see an empty schema. Wait until the table is fully created
+      // before we compare the schema.
+      RETURN_NOT_OK_PREPEND(
+          data_->WaitForCreateTableToFinish(this, table_name, resp.parent_table_id(), deadline),
+          strings::Substitute("Failed waiting for table $0 to finish being created",
+                              table_name.ToString()));
+
+      RETURN_NOT_OK_PREPEND(
+          data_->GetTableSchema(this, table_name, deadline, &info),
+          strings::Substitute("Unable to check the schema of table $0", table_name.ToString()));
+
+      YBSchemaBuilder schemaBuilder;
+      schemaBuilder.AddColumn("parent_column")->Type(BINARY)->PrimaryKey()->NotNull();
+      YBSchema ybschema;
+      CHECK_OK(schemaBuilder.Build(&ybschema));
+
+      if (!ybschema.Equals(info.schema)) {
+         string msg = Format("Table $0 already exists with a different "
+                             "schema. Requested schema was: $1, actual schema is: $2",
+                             table_name,
+                             internal::GetSchema(ybschema),
+                             internal::GetSchema(info.schema));
+        LOG(ERROR) << msg;
+        return STATUS(AlreadyPresent, msg);
+      }
+
+      return Status::OK();
+    }
+
+    return StatusFromPB(resp.error().status());
+  }
+
+  // Wait for create table to finish.
+  RETURN_NOT_OK_PREPEND(
+      data_->WaitForCreateTableToFinish(this, table_name, resp.parent_table_id(), deadline),
+      strings::Substitute("Failed waiting for parent table $0 to finish being created",
+                          table_name.ToString()));
 
   return Status::OK();
 }
@@ -888,8 +953,41 @@ Status YBClient::DeleteTablegroup(const std::string& tablegroup_name,
   req.set_id(tablegroup_id);
   req.set_namespace_id(namespace_id);
 
-  CALL_SYNC_LEADER_MASTER_RPC(req, resp, DeleteTablegroup);
+  int attempts = 0;
+  auto deadline = CoarseMonoClock::Now() + default_admin_operation_timeout();
 
+  const Status s = data_->SyncLeaderMasterRpc<DeleteTablegroupRequestPB, DeleteTablegroupResponsePB>(
+      deadline, req, &resp, &attempts, "DeleteTablegroup", &MasterServiceProxy::DeleteTablegroup);
+
+  // This case should not happen but need to validate contents since fields are optional in PB.
+  if (!resp.has_parent_table_id()) {
+    return STATUS(NotFound, "Parent table information not found in DELETE TABLEGROUP response.");
+  }
+
+  // Handle special cases based on resp.error().
+  if (resp.has_error()) {
+    LOG_IF(DFATAL, s.ok()) << "Expecting error status if response has error: " <<
+        resp.error().code() << " Status: " << resp.error().status().ShortDebugString();
+
+    if (resp.error().code() == master::MasterErrorPB::OBJECT_NOT_FOUND && attempts > 1) {
+      // A prior attempt to delete the table has succeeded, but
+      // appeared as a failure to the client due to, e.g., an I/O or
+      // network issue.
+      // Good case - go through - to 'return Status::OK()'
+    } else {
+      return StatusFromPB(resp.error().status());
+    }
+  } else {
+    // Check the status only if the response has no error.
+    RETURN_NOT_OK(s);
+  }
+
+  // Spin until the table is fully deleted
+  RETURN_NOT_OK_PREPEND(data_->WaitForDeleteTableToFinish(this, resp.parent_table_id(), deadline),
+      strings::Substitute("Failed waiting for parent table with id $0 to finish being deleted",
+                          resp.parent_table_id()));
+
+  LOG(INFO) << "Deleted parent table for tablegroup " << tablegroup_name;
   return Status::OK();
 }
 
