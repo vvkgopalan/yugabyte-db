@@ -750,7 +750,8 @@ Status PgSession::DropTablegroup(const string& tablegroup_name,
   Status s = client_->DeleteTablegroup(tablegroup_name,
                                        GetPgsqlNamespaceId(database_oid),
                                        GetPgsqlTablegroupId(database_oid, tablegroup_oid));
-  table_cache_.erase(GetPgsqlTablegroupId(database_oid, tablegroup_oid) + ".tablegroup.parent.uuid");
+  table_cache_.erase(GetPgsqlTablegroupId(database_oid, tablegroup_oid) +
+      ".tablegroup.parent.uuid");
   return s;
 }
 

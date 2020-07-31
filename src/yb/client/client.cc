@@ -983,7 +983,7 @@ Status YBClient::DeleteTablegroup(const std::string& tablegroup_name,
   }
 
   // Spin until the table is fully deleted
-  //RETURN_NOT_OK_PREPEND(data_->WaitForDeleteTableToFinish(this, resp.parent_table_id(), deadline),
+  // RETURN_NOT_OK_PREPEND(data_->WaitForDeleteTableToFinish(this, resp.parent_table_id(), deadline),
   //    strings::Substitute("Failed waiting for parent table with id $0 to finish being deleted",
   //                        resp.parent_table_id()));
 
