@@ -982,17 +982,20 @@ Status YBClient::DeleteTablegroup(const std::string& tablegroup_name,
     RETURN_NOT_OK(s);
   }
 
-  // Spin until the table is fully deleted
-  // RETURN_NOT_OK_PREPEND(data_->WaitForDeleteTableToFinish(this, resp.parent_table_id(), deadline),
-  //    strings::Substitute("Failed waiting for parent table with id $0 to finish being deleted",
-  //                        resp.parent_table_id()));
+  // Spin until the table is deleted. Currently only waits till the table reaches DELETING state
+  // See github issue #5290
+  RETURN_NOT_OK_PREPEND(data_->WaitForDeleteTableToFinish(this,
+                                                          resp.parent_table_id(),
+                                                          deadline),
+      strings::Substitute("Failed waiting for parent table with id $0 to finish being deleted",
+                          resp.parent_table_id()));
 
   LOG(INFO) << "Deleted parent table for tablegroup " << tablegroup_name;
   return Status::OK();
 }
 
-Result<vector<master::TablegroupIdentifierPB>> YBClient::ListTablegroups(
-    const std::string& namespace_name, const std::string& tablegroup_name) {
+Result<vector<master::TablegroupIdentifierPB>>
+YBClient::ListTablegroups(const std::string& namespace_name) {
   GetNamespaceInfoResponsePB ret;
   Status s = GetNamespaceInfo("", namespace_name, YQL_DATABASE_PGSQL, &ret);
   if (!s.ok()) {
@@ -1016,7 +1019,7 @@ Result<vector<master::TablegroupIdentifierPB>> YBClient::ListTablegroups(
 Result<bool> YBClient::TablegroupExists(const std::string& namespace_name,
                                         const std::string& tablegroup_name) {
 
-  for (const auto& tg : VERIFY_RESULT(ListTablegroups(namespace_name, tablegroup_name))) {
+  for (const auto& tg : VERIFY_RESULT(ListTablegroups(namespace_name))) {
     if (tg.name().compare(tablegroup_name) == 0) {
       return true;
     }

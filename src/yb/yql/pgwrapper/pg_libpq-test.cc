@@ -932,7 +932,7 @@ Result<master::TabletLocationsPB> GetTablegroupTabletLocations(
   }
 
   // Get tablegroup id.
-  for (const auto& tg : VERIFY_RESULT(client->ListTablegroups(database_name, tablegroup_name))) {
+  for (const auto& tg : VERIFY_RESULT(client->ListTablegroups(database_name))) {
     if (tg.name() == tablegroup_name) {
       tg_id = tg.id();
       break;
@@ -1151,7 +1151,16 @@ TEST_F(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(TxnConflictsForColocatedTables)) {
   ASSERT_OK(conn2.CommitTransaction());
 }
 
-TEST_F(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(ColocatedTablegroups)) {
+class PgLibPqTablegroupTest : public PgLibPqTest {
+  void UpdateMiniClusterOptions(ExternalMiniClusterOptions* options) override {
+    // Enable tablegroup beta feature
+    options->extra_tserver_flags.push_back("--ysql_beta_feature_tablegroup=true");
+    options->extra_master_flags.push_back("--ysql_beta_feature_tablegroup=true");
+  }
+};
+
+TEST_F_EX(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(ColocatedTablegroups),
+          PgLibPqTablegroupTest) {
   auto client = ASSERT_RESULT(cluster_->CreateClient());
   const string kDatabaseName ="tgroup_test_db";
   const string kTablegroupName ="test_tgroup";
@@ -1196,7 +1205,7 @@ TEST_F(PgLibPqTest, YB_DISABLE_TEST_IN_TSAN(ColocatedTablegroups)) {
   }
 
   // Create an index on the table not in a tablegroup. The index should follow the table
-  // and opt out of colocation.
+  // and opt out of the tablegroup.
   ASSERT_OK(conn.Execute("CREATE INDEX bar_index ON bar (a)"));
   table_id = ASSERT_RESULT(GetTableIdByTableName(client.get(), kDatabaseName, "bar_index"));
   ASSERT_OK(client->GetTabletsFromTableId(table_id, 0, &tablets));

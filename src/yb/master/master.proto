@@ -177,7 +177,7 @@ message TablegroupIdentifierPB {
   // The tablegroup name to fetch info.
   optional string name = 2;
 
-  // The tablegroup namespace (if empty - using default namespace).
+  // The namespace that the tablegroup is in
   optional bytes namespace_id = 3;
 }
 

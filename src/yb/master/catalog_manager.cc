@@ -2261,22 +2261,20 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
         tablegroup_tablet_ids_map_[ns->id()].end()) {
       tablegroup_tablets_exist = true;
     }
-    // If using tablegroups, tablets_exist will always be false.
+
     RETURN_NOT_OK(CreateTableInMemory(
         req, schema, partition_schema,
         !tablets_exist && !tablegroup_tablets_exist /* create_tablets */,
         namespace_id, partitions, &index_info, &tablets, resp, &table));
 
-    // If the tablegroup_id for a CREATE TABLE statement is set, this section does one of two things
-    // (1) If the table is not a tablegroup parent table, it performs a lookup for the proper tablet
-    // to place the table on as a child table.
-    // (2) If the table is a tablegroup parent table, it creates a dummy tablet for the tablegroup
-    // along with updating the catalog manager maps.
+    // Section is executed when a table is either the parent table or a user table in a tablegroup.
     // It additionally sets the table metadata (and tablet metadata if this is the parent table)
     // to have the colocated property so we can take advantage of code reuse.
     if (req.has_tablegroup_id()) {
       table->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
       if (tablegroup_tablets_exist) {
+        // If the table is not a tablegroup parent table, it performs a lookup for the proper tablet
+        // to place the table on as a child table.
         scoped_refptr<TabletInfo> tablet =
             tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()];
         DSCHECK(
@@ -2292,6 +2290,8 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
         table->AddTablets(tablets);
         tablegroup_ids_map_[req.tablegroup_id()]->AddChildTable(table->id());
       } else {
+        // If the table is a tablegroup parent table, it creates a dummy tablet for the tablegroup
+        // along with updating the catalog manager maps.
         DSCHECK_EQ(
             tablets.size(), 1, InternalError,
             "Only one tablet should be created for each tablegroup");
@@ -2300,9 +2300,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
         tablegroup_tablet_ids_map_[ns->id()][req.tablegroup_id()] =
             tablet_map_->find(tablets[0]->id())->second;
       }
-    }
-
-    if (colocated) {
+    } else if (colocated) {
       table->mutable_metadata()->mutable_dirty()->pb.set_colocated(true);
       // if the tablet already exists, add the tablet to tablets
       if (tablets_exist) {
@@ -2398,7 +2396,7 @@ Status CatalogManager::CreateTable(const CreateTableRequestPB* orig_req,
     tablet->mutable_metadata()->CommitMutation();
   }
 
-  if ((colocated && tablets_exist) || (tablegroup_tablets_exist && req.has_tablegroup_id())) {
+  if ((colocated && tablets_exist) || (req.has_tablegroup_id() && tablegroup_tablets_exist)) {
     auto call =
         std::make_shared<AsyncAddTableToTablet>(master_, AsyncTaskPool(), tablets[0], table);
     table->AddTask(call);
@@ -3565,6 +3563,14 @@ Status CatalogManager::IsDeleteTableDone(const IsDeleteTableDoneRequestPB* req,
                  << req->table_id() << ": NOT deleted";
     Status s = STATUS(IllegalState, "The object was NOT deleted", l->data().pb.state_msg());
     return SetupError(resp->mutable_error(), MasterErrorPB::OBJECT_NOT_FOUND, s);
+  }
+
+  // Temporary fix for github issue #5290
+  if (IsTablegroupParentTable(*table)) {
+    LOG(INFO) << "Servicing IsDeleteTableDone request for table id "
+              << req->table_id() << ": deleting.";
+    resp->set_done(true);
+    return Status::OK();
   }
 
   if (l->data().is_deleted()) {

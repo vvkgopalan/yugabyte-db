@@ -438,7 +438,7 @@ PgCreateIndex::PgCreateIndex(PgSession::ScopedRefPtr pg_session,
                              const PgObjectId& tablegroup_oid)
     : PgCreateTable(pg_session, database_name, schema_name, index_name, index_id,
                     is_shared_index, if_not_exist, false /* add_primary_key */,
-                    tablegroup_oid.IsValid() ? true : false /* colocated */, tablegroup_oid),
+                    tablegroup_oid.IsValid() ? false : true /* colocated */, tablegroup_oid),
       base_table_id_(base_table_id),
       is_unique_index_(is_unique_index),
       skip_index_backfill_(skip_index_backfill) {

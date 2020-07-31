@@ -548,7 +548,8 @@ class TablegroupInfo : public RefCountedThreadSafe<TablegroupInfo>{
   friend class RefCountedThreadSafe<TablegroupInfo>;
   ~TablegroupInfo() = default;
 
-  // The ID field is used in the sys_catalog table.
+  // The tablegroup ID is used in the catalog manager maps to look up the proper
+  // tablet to add user tables to.
   const TablegroupId tablegroup_id_;
   const std::string tablegroup_name_;
   const NamespaceId namespace_id_;

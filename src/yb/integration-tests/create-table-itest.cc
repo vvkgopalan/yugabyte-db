@@ -424,6 +424,7 @@ TEST_F(CreateTableITest, TablegroupRemoteBootstrapTest) {
   string namespace_id;
 
   ts_flags.push_back("--follower_unavailable_considered_failed_sec=3");
+  ts_flags.push_back("--ysql_beta_feature_tablegroup=true");
   ASSERT_NO_FATALS(StartCluster(ts_flags, master_flags, kNumReplicas));
 
   ASSERT_OK(
@@ -440,7 +441,7 @@ TEST_F(CreateTableITest, TablegroupRemoteBootstrapTest) {
     ASSERT_FALSE(namespace_id.empty());
   }
 
-  // For testing purposes - we are not using a valid PgsqlTablegroupId
+  // Since this is just for testing purposes, we do not bother generating a valid PgsqlTablegroupId
   ASSERT_OK(
       client_->CreateTablegroup(namespace_name, namespace_id,
                                 tablegroup_name, tablegroup_id));
@@ -448,8 +449,7 @@ TEST_F(CreateTableITest, TablegroupRemoteBootstrapTest) {
   // Now want to ensure that the newly created tablegroup shows up in the list.
   {
     string tg_id;
-    auto tablegroups = ASSERT_RESULT(client_->ListTablegroups(namespace_name,
-                                                              tablegroup_name));
+    auto tablegroups = ASSERT_RESULT(client_->ListTablegroups(namespace_name));
     for (const auto& tg : tablegroups) {
       if (tg.name() == tablegroup_name) {
         tg_id = tg.id();
