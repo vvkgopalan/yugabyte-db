@@ -956,7 +956,7 @@ Status YBClient::DeleteTablegroup(const std::string& tablegroup_name,
   int attempts = 0;
   auto deadline = CoarseMonoClock::Now() + default_admin_operation_timeout();
 
-  const Status s = data_->SyncLeaderMasterRpc<DeleteTablegroupRequestPB, DeleteTablegroupResponsePB>(
+  Status s = data_->SyncLeaderMasterRpc<DeleteTablegroupRequestPB, DeleteTablegroupResponsePB>(
       deadline, req, &resp, &attempts, "DeleteTablegroup", &MasterServiceProxy::DeleteTablegroup);
 
   // This case should not happen but need to validate contents since fields are optional in PB.
@@ -983,9 +983,9 @@ Status YBClient::DeleteTablegroup(const std::string& tablegroup_name,
   }
 
   // Spin until the table is fully deleted
-  RETURN_NOT_OK_PREPEND(data_->WaitForDeleteTableToFinish(this, resp.parent_table_id(), deadline),
-      strings::Substitute("Failed waiting for parent table with id $0 to finish being deleted",
-                          resp.parent_table_id()));
+  //RETURN_NOT_OK_PREPEND(data_->WaitForDeleteTableToFinish(this, resp.parent_table_id(), deadline),
+  //    strings::Substitute("Failed waiting for parent table with id $0 to finish being deleted",
+  //                        resp.parent_table_id()));
 
   LOG(INFO) << "Deleted parent table for tablegroup " << tablegroup_name;
   return Status::OK();

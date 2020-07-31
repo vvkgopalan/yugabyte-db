@@ -3841,7 +3841,7 @@ static void YBPrepareCacheRefreshIfNeeded(ErrorData *edata,
 				ereport(ERROR,
 						(errcode(ERRCODE_INTERNAL_ERROR),
 						 errmsg("Catalog Version Mismatch: A DDL occurred "
-								"while processing this query. Try Again.")));
+								"while processing this query. Try Again. %llu %llu %s", yb_catalog_cache_version, catalog_master_version, YBCGetStackTrace())));
 			else
 			{
 				/* need_table_cache_refresh */

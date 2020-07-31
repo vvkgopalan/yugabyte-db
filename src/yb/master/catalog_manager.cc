@@ -3572,8 +3572,11 @@ Status CatalogManager::IsDeleteTableDone(const IsDeleteTableDoneRequestPB* req,
               << req->table_id() << ": totally deleted";
       resp->set_done(true);
   } else {
-    LOG(INFO) << "Servicing IsDeleteTableDone request for table id "
-              << req->table_id() << ": deleting tablets";
+    LOG(INFO) << "Servicing IsDeleteTableDone request for table id " << req->table_id();
+    if (!IsColocatedUserTable(*table)) {
+      LOG(INFO) << ": deleting tablets";
+    }
+
     std::vector<std::shared_ptr<TSDescriptor>> descs;
     master_->ts_manager()->GetAllDescriptors(&descs);
     for (auto& ts_desc : descs) {
@@ -4789,7 +4792,7 @@ Status CatalogManager::CreateTablegroup(const CreateTablegroupRequestPB* req,
 
   // Create a parent table, which will create the tablet.
   Status s = CreateTable(&ctreq, &ctresp, rpc);
-  resp->set_parent_table_id(parent_table_id);
+  resp->set_parent_table_id(ctresp.table_id());
   resp->set_parent_table_name(parent_table_name);
 
   // Carry over error.
@@ -4834,7 +4837,7 @@ Status CatalogManager::DeleteTablegroup(const DeleteTablegroupRequestPB* req,
   dtreq.set_is_index_table(false);
 
   Status s = DeleteTable(&dtreq, &dtresp, rpc);
-  resp->set_parent_table_id(parent_table_id);
+  resp->set_parent_table_id(dtresp.table_id());
 
   // Carry over error.
   if (dtresp.has_error()) {
