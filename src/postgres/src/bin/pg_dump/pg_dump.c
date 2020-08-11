@@ -273,6 +273,7 @@ static void dumpDatabaseConfig(Archive *AH, PQExpBuffer outbuf,
 static void dumpEncoding(Archive *AH);
 static void dumpStdStrings(Archive *AH);
 static void dumpSearchPath(Archive *AH);
+static void dumpTablegroups(Archive *AH);
 static void binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 										 PQExpBuffer upgrade_buffer,
 										 Oid pg_type_oid,
@@ -397,6 +398,7 @@ main(int argc, char **argv)
 		{"no-subscriptions", no_argument, &dopt.no_subscriptions, 1},
 		{"no-sync", no_argument, NULL, 7},
 		{"include-yb-metadata", no_argument, &dopt.include_yb_metadata, 1},
+		{"no-tablegroups", no_argument, &dopt.include_tablegroups, 1},
 
 		{NULL, 0, NULL, 0}
 	};
@@ -907,6 +909,10 @@ main(int argc, char **argv)
 		dumpDatabase(fout);
 	else if (dopt.include_yb_metadata)
 		dopt.db_oid = getDatabaseOid(fout);
+
+	/* Then can greedily dump all tablegroups */
+	if (dopt.include_tablegroups)
+		dumpTablegroups(fout);
 
 	/* Now the rearrangeable objects. */
 	for (i = 0; i < numObjs; i++)
@@ -3426,6 +3432,344 @@ dumpBlob(Archive *fout, BlobInfo *binfo)
 
 	destroyPQExpBuffer(cquery);
 	destroyPQExpBuffer(dquery);
+}
+
+/*
+ * dumpDatabase:
+ *	dump the database definition
+ */
+static void
+dumpDatabase(Archive *fout)
+{
+	DumpOptions *dopt = fout->dopt;
+	PQExpBuffer grpQry = createPQExpBuffer();
+	PQExpBuffer delQry = createPQExpBuffer();
+	PQExpBuffer creaQry = createPQExpBuffer();
+	PGconn	   *conn = GetConnection(fout);
+	PGresult   *res;
+	int			i_oid,
+				i_grpname,
+				i_grpowner,
+				i_grpacl,
+				i_grpoptions;
+	CatalogId	dbCatId;
+	DumpId		dbDumpId;
+
+	res = queryTablegroupData(fout, grpQry);
+
+	i_oid = PQfnumber(res, "oid");
+	i_grpname = PQfnumber(res, "grpname");
+	i_grpowner = PQfnumber(res, "grpowner");
+	i_grpacl = PQfnumber(res, "grpacl");
+	i_grpoptions = PQfnumber(res, "grpoptions");
+
+	dbCatId.tableoid = atooid(PQgetvalue(res, 0, i_tableoid));
+	dbCatId.oid = atooid(PQgetvalue(res, 0, i_oid));
+	dopt->db_oid = dbCatId.oid;
+	datname = PQgetvalue(res, 0, i_datname);
+	dba = PQgetvalue(res, 0, i_dba);
+	encoding = PQgetvalue(res, 0, i_encoding);
+	collate = PQgetvalue(res, 0, i_collate);
+	ctype = PQgetvalue(res, 0, i_ctype);
+	frozenxid = atooid(PQgetvalue(res, 0, i_frozenxid));
+	minmxid = atooid(PQgetvalue(res, 0, i_minmxid));
+	datacl = PQgetvalue(res, 0, i_datacl);
+	rdatacl = PQgetvalue(res, 0, i_rdatacl);
+	datistemplate = PQgetvalue(res, 0, i_datistemplate);
+	datconnlimit = PQgetvalue(res, 0, i_datconnlimit);
+	tablespace = PQgetvalue(res, 0, i_tablespace);
+
+	qdatname = pg_strdup(fmtId(datname));
+
+	/*
+	 * Prepare the CREATE DATABASE command.  We must specify encoding, locale,
+	 * and tablespace since those can't be altered later.  Other DB properties
+	 * are left to the DATABASE PROPERTIES entry, so that they can be applied
+	 * after reconnecting to the target DB.
+	 */
+	appendPQExpBuffer(creaQry, "CREATE DATABASE %s WITH TEMPLATE = template0",
+					  qdatname);
+	if (strlen(encoding) > 0)
+	{
+		appendPQExpBufferStr(creaQry, " ENCODING = ");
+		appendStringLiteralAH(creaQry, encoding, fout);
+	}
+	if (strlen(collate) > 0)
+	{
+		appendPQExpBufferStr(creaQry, " LC_COLLATE = ");
+		appendStringLiteralAH(creaQry, collate, fout);
+	}
+	if (strlen(ctype) > 0)
+	{
+		appendPQExpBufferStr(creaQry, " LC_CTYPE = ");
+		appendStringLiteralAH(creaQry, ctype, fout);
+	}
+
+	/*
+	 * Note: looking at dopt->outputNoTablespaces here is completely the wrong
+	 * thing; the decision whether to specify a tablespace should be left till
+	 * pg_restore, so that pg_restore --no-tablespaces applies.  Ideally we'd
+	 * label the DATABASE entry with the tablespace and let the normal
+	 * tablespace selection logic work ... but CREATE DATABASE doesn't pay
+	 * attention to default_tablespace, so that won't work.
+	 */
+	if (strlen(tablespace) > 0 && strcmp(tablespace, "pg_default") != 0 &&
+		!dopt->outputNoTablespaces)
+		appendPQExpBuffer(creaQry, " TABLESPACE = %s",
+						  fmtId(tablespace));
+	appendPQExpBufferStr(creaQry, ";\n");
+
+	appendPQExpBuffer(delQry, "DROP DATABASE %s;\n",
+					  qdatname);
+
+	dbDumpId = createDumpId();
+
+	ArchiveEntry(fout,
+				 dbCatId,		/* catalog ID */
+				 dbDumpId,		/* dump ID */
+				 datname,		/* Name */
+				 NULL,			/* Namespace */
+				 NULL,			/* Tablespace */
+				 dba,			/* Owner */
+				 false,			/* with oids */
+				 "DATABASE",	/* Desc */
+				 SECTION_PRE_DATA,	/* Section */
+				 creaQry->data, /* Create */
+				 delQry->data,	/* Del */
+				 NULL,			/* Copy */
+				 NULL,			/* Deps */
+				 0,				/* # Deps */
+				 NULL,			/* Dumper */
+				 NULL);			/* Dumper Arg */
+
+	/* Compute correct tag for archive entry */
+	appendPQExpBuffer(labelq, "DATABASE %s", qdatname);
+
+	/* Dump DB comment if any */
+	if (fout->remoteVersion >= 80200)
+	{
+		/*
+		 * 8.2 and up keep comments on shared objects in a shared table, so we
+		 * cannot use the dumpComment() code used for other database objects.
+		 * Be careful that the ArchiveEntry parameters match that function.
+		 */
+		char	   *comment = PQgetvalue(res, 0, PQfnumber(res, "description"));
+
+		if (comment && *comment && !dopt->no_comments)
+		{
+			resetPQExpBuffer(dbQry);
+
+			/*
+			 * Generates warning when loaded into a differently-named
+			 * database.
+			 */
+			appendPQExpBuffer(dbQry, "COMMENT ON DATABASE %s IS ", qdatname);
+			appendStringLiteralAH(dbQry, comment, fout);
+			appendPQExpBufferStr(dbQry, ";\n");
+
+			ArchiveEntry(fout, nilCatalogId, createDumpId(),
+						 labelq->data, NULL, NULL, dba,
+						 false, "COMMENT", SECTION_NONE,
+						 dbQry->data, "", NULL,
+						 &(dbDumpId), 1,
+						 NULL, NULL);
+		}
+	}
+	else
+	{
+		dumpComment(fout, "DATABASE", qdatname, NULL, dba,
+					dbCatId, 0, dbDumpId);
+	}
+
+	/* Dump DB security label, if enabled */
+	if (!dopt->no_security_labels && fout->remoteVersion >= 90200)
+	{
+		PGresult   *shres;
+		PQExpBuffer seclabelQry;
+
+		seclabelQry = createPQExpBuffer();
+
+		buildShSecLabelQuery(conn, "pg_database", dbCatId.oid, seclabelQry);
+		shres = ExecuteSqlQuery(fout, seclabelQry->data, PGRES_TUPLES_OK);
+		resetPQExpBuffer(seclabelQry);
+		emitShSecLabels(conn, shres, seclabelQry, "DATABASE", datname);
+		if (seclabelQry->len > 0)
+			ArchiveEntry(fout, nilCatalogId, createDumpId(),
+						 labelq->data, NULL, NULL, dba,
+						 false, "SECURITY LABEL", SECTION_NONE,
+						 seclabelQry->data, "", NULL,
+						 &(dbDumpId), 1,
+						 NULL, NULL);
+		destroyPQExpBuffer(seclabelQry);
+		PQclear(shres);
+	}
+
+	/*
+	 * Dump ACL if any.  Note that we do not support initial privileges
+	 * (pg_init_privs) on databases.
+	 */
+	dumpACL(fout, dbCatId, dbDumpId, "DATABASE",
+			qdatname, NULL, NULL,
+			dba, datacl, rdatacl, "", "");
+
+	/*
+	 * Now construct a DATABASE PROPERTIES archive entry to restore any
+	 * non-default database-level properties.  (The reason this must be
+	 * separate is that we cannot put any additional commands into the TOC
+	 * entry that has CREATE DATABASE.  pg_restore would execute such a group
+	 * in an implicit transaction block, and the backend won't allow CREATE
+	 * DATABASE in that context.)
+	 */
+	resetPQExpBuffer(creaQry);
+	resetPQExpBuffer(delQry);
+
+	if (strlen(datconnlimit) > 0 && strcmp(datconnlimit, "-1") != 0)
+		appendPQExpBuffer(creaQry, "ALTER DATABASE %s CONNECTION LIMIT = %s;\n",
+						  qdatname, datconnlimit);
+
+	if (strcmp(datistemplate, "t") == 0)
+	{
+		appendPQExpBuffer(creaQry, "ALTER DATABASE %s IS_TEMPLATE = true;\n",
+						  qdatname);
+
+		/*
+		 * The backend won't accept DROP DATABASE on a template database.  We
+		 * can deal with that by removing the template marking before the DROP
+		 * gets issued.  We'd prefer to use ALTER DATABASE IF EXISTS here, but
+		 * since no such command is currently supported, fake it with a direct
+		 * UPDATE on pg_database.
+		 */
+		appendPQExpBufferStr(delQry, "UPDATE pg_catalog.pg_database "
+							 "SET datistemplate = false WHERE datname = ");
+		appendStringLiteralAH(delQry, datname, fout);
+		appendPQExpBufferStr(delQry, ";\n");
+	}
+
+	/* Add database-specific SET options */
+	dumpDatabaseConfig(fout, creaQry, datname, dbCatId.oid);
+
+	/*
+	 * We stick this binary-upgrade query into the DATABASE PROPERTIES archive
+	 * entry, too, for lack of a better place.
+	 */
+	if (dopt->binary_upgrade)
+	{
+		appendPQExpBufferStr(creaQry, "\n-- For binary upgrade, set datfrozenxid and datminmxid.\n");
+		appendPQExpBuffer(creaQry, "UPDATE pg_catalog.pg_database\n"
+						  "SET datfrozenxid = '%u', datminmxid = '%u'\n"
+						  "WHERE datname = ",
+						  frozenxid, minmxid);
+		appendStringLiteralAH(creaQry, datname, fout);
+		appendPQExpBufferStr(creaQry, ";\n");
+	}
+
+	if (creaQry->len > 0)
+		ArchiveEntry(fout, nilCatalogId, createDumpId(),
+					 datname, NULL, NULL, dba,
+					 false, "DATABASE PROPERTIES", SECTION_PRE_DATA,
+					 creaQry->data, delQry->data, NULL,
+					 &(dbDumpId), 1,
+					 NULL, NULL);
+
+	/*
+	 * pg_largeobject and pg_largeobject_metadata come from the old system
+	 * intact, so set their relfrozenxids and relminmxids.
+	 */
+	if (dopt->binary_upgrade)
+	{
+		PGresult   *lo_res;
+		PQExpBuffer loFrozenQry = createPQExpBuffer();
+		PQExpBuffer loOutQry = createPQExpBuffer();
+		int			i_relfrozenxid,
+					i_relminmxid;
+
+		/*
+		 * pg_largeobject
+		 */
+		if (fout->remoteVersion >= 90300)
+			appendPQExpBuffer(loFrozenQry, "SELECT relfrozenxid, relminmxid\n"
+							  "FROM pg_catalog.pg_class\n"
+							  "WHERE oid = %u;\n",
+							  LargeObjectRelationId);
+		else
+			appendPQExpBuffer(loFrozenQry, "SELECT relfrozenxid, 0 AS relminmxid\n"
+							  "FROM pg_catalog.pg_class\n"
+							  "WHERE oid = %u;\n",
+							  LargeObjectRelationId);
+
+		lo_res = ExecuteSqlQueryForSingleRow(fout, loFrozenQry->data);
+
+		i_relfrozenxid = PQfnumber(lo_res, "relfrozenxid");
+		i_relminmxid = PQfnumber(lo_res, "relminmxid");
+
+		appendPQExpBufferStr(loOutQry, "\n-- For binary upgrade, set pg_largeobject relfrozenxid and relminmxid\n");
+		appendPQExpBuffer(loOutQry, "UPDATE pg_catalog.pg_class\n"
+						  "SET relfrozenxid = '%u', relminmxid = '%u'\n"
+						  "WHERE oid = %u;\n",
+						  atooid(PQgetvalue(lo_res, 0, i_relfrozenxid)),
+						  atooid(PQgetvalue(lo_res, 0, i_relminmxid)),
+						  LargeObjectRelationId);
+		ArchiveEntry(fout, nilCatalogId, createDumpId(),
+					 "pg_largeobject", NULL, NULL, "",
+					 false, "pg_largeobject", SECTION_PRE_DATA,
+					 loOutQry->data, "", NULL,
+					 NULL, 0,
+					 NULL, NULL);
+
+		PQclear(lo_res);
+
+		/*
+		 * pg_largeobject_metadata
+		 */
+		if (fout->remoteVersion >= 90000)
+		{
+			resetPQExpBuffer(loFrozenQry);
+			resetPQExpBuffer(loOutQry);
+
+			if (fout->remoteVersion >= 90300)
+				appendPQExpBuffer(loFrozenQry, "SELECT relfrozenxid, relminmxid\n"
+								  "FROM pg_catalog.pg_class\n"
+								  "WHERE oid = %u;\n",
+								  LargeObjectMetadataRelationId);
+			else
+				appendPQExpBuffer(loFrozenQry, "SELECT relfrozenxid, 0 AS relminmxid\n"
+								  "FROM pg_catalog.pg_class\n"
+								  "WHERE oid = %u;\n",
+								  LargeObjectMetadataRelationId);
+
+			lo_res = ExecuteSqlQueryForSingleRow(fout, loFrozenQry->data);
+
+			i_relfrozenxid = PQfnumber(lo_res, "relfrozenxid");
+			i_relminmxid = PQfnumber(lo_res, "relminmxid");
+
+			appendPQExpBufferStr(loOutQry, "\n-- For binary upgrade, set pg_largeobject_metadata relfrozenxid and relminmxid\n");
+			appendPQExpBuffer(loOutQry, "UPDATE pg_catalog.pg_class\n"
+							  "SET relfrozenxid = '%u', relminmxid = '%u'\n"
+							  "WHERE oid = %u;\n",
+							  atooid(PQgetvalue(lo_res, 0, i_relfrozenxid)),
+							  atooid(PQgetvalue(lo_res, 0, i_relminmxid)),
+							  LargeObjectMetadataRelationId);
+			ArchiveEntry(fout, nilCatalogId, createDumpId(),
+						 "pg_largeobject_metadata", NULL, NULL, "",
+						 false, "pg_largeobject_metadata", SECTION_PRE_DATA,
+						 loOutQry->data, "", NULL,
+						 NULL, 0,
+						 NULL, NULL);
+
+			PQclear(lo_res);
+		}
+
+		destroyPQExpBuffer(loFrozenQry);
+		destroyPQExpBuffer(loOutQry);
+	}
+
+	PQclear(res);
+
+	free(qdatname);
+	destroyPQExpBuffer(dbQry);
+	destroyPQExpBuffer(delQry);
+	destroyPQExpBuffer(creaQry);
+	destroyPQExpBuffer(labelq);
 }
 
 /*
@@ -15902,6 +16246,42 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 				exit_nicely(1);
 			}
 			/* else - single shard table - supported, no need to add anything */
+			if (dopt->include_tablegroups)
+			{
+				/* Process tablegroup */
+				PQExpBufferData tablegroupbuf;
+				PGresult *tgres = NULL;
+				initPQExpBuffer(&tablegroupbuf);
+
+				/* Get information about tablegroup (if any) */
+				printfPQExpBuffer(&tablegroupbuf,
+								  "SELECT SUBSTRING(unnest(reloptions) from '.*tablegroup=(\\d*).*') AS tablegroup\n"
+								  "FROM pg_catalog.pg_class WHERE oid = '%s';",
+								  tbinfo->dobj.catId.oid);
+
+				tgres = PSQLexec(tablegroupbuf.data);
+				Oid grpoid;
+				if (tgres && PQntuples(tgres) > 0)
+				{
+					grpoid = atooid(PQgetvalue(tgres, 0, 0));
+				}
+				else
+					grpoid = 0;
+
+				printfPQExpBuffer(&tablegroupbuf,
+								  "SELECT grpname\n"
+								  "FROM pg_catalog.pg_tablegroup WHERE oid = '%s';",
+								  grpoid);
+				tgres = PSQLexec(tablegroupbuf.data);
+				if (tgres && PQntuples(tgres) > 0)
+				{
+					appendPQExpBuffer(q, "\nTABLEGROUP %s", PQgetvalue(tgres, 0, 0));
+				}
+
+				PQclear(tgres);
+				tgres = NULL;
+				termPQExpBuffer(&tablegroupbuf);
+			}
 		}
 #endif  /* DISABLE_YB_EXTENTIONS */
 
