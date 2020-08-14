@@ -3435,11 +3435,11 @@ dumpBlob(Archive *fout, BlobInfo *binfo)
 }
 
 /*
- * dumpDatabase:
- *	dump the database definition
+ * dumpTablegroups:
+ *	dump the tablegroups definitions
  */
 static void
-dumpDatabase(Archive *fout)
+dumpTablegroups(Archive *fout)
 {
 	DumpOptions *dopt = fout->dopt;
 	PQExpBuffer grpQry = createPQExpBuffer();
@@ -3463,21 +3463,7 @@ dumpDatabase(Archive *fout)
 	i_grpacl = PQfnumber(res, "grpacl");
 	i_grpoptions = PQfnumber(res, "grpoptions");
 
-	dbCatId.tableoid = atooid(PQgetvalue(res, 0, i_tableoid));
-	dbCatId.oid = atooid(PQgetvalue(res, 0, i_oid));
-	dopt->db_oid = dbCatId.oid;
-	datname = PQgetvalue(res, 0, i_datname);
-	dba = PQgetvalue(res, 0, i_dba);
-	encoding = PQgetvalue(res, 0, i_encoding);
-	collate = PQgetvalue(res, 0, i_collate);
-	ctype = PQgetvalue(res, 0, i_ctype);
-	frozenxid = atooid(PQgetvalue(res, 0, i_frozenxid));
-	minmxid = atooid(PQgetvalue(res, 0, i_minmxid));
-	datacl = PQgetvalue(res, 0, i_datacl);
-	rdatacl = PQgetvalue(res, 0, i_rdatacl);
-	datistemplate = PQgetvalue(res, 0, i_datistemplate);
-	datconnlimit = PQgetvalue(res, 0, i_datconnlimit);
-	tablespace = PQgetvalue(res, 0, i_tablespace);
+
 
 	qdatname = pg_strdup(fmtId(datname));
 
@@ -3504,23 +3490,6 @@ dumpDatabase(Archive *fout)
 		appendPQExpBufferStr(creaQry, " LC_CTYPE = ");
 		appendStringLiteralAH(creaQry, ctype, fout);
 	}
-
-	/*
-	 * Note: looking at dopt->outputNoTablespaces here is completely the wrong
-	 * thing; the decision whether to specify a tablespace should be left till
-	 * pg_restore, so that pg_restore --no-tablespaces applies.  Ideally we'd
-	 * label the DATABASE entry with the tablespace and let the normal
-	 * tablespace selection logic work ... but CREATE DATABASE doesn't pay
-	 * attention to default_tablespace, so that won't work.
-	 */
-	if (strlen(tablespace) > 0 && strcmp(tablespace, "pg_default") != 0 &&
-		!dopt->outputNoTablespaces)
-		appendPQExpBuffer(creaQry, " TABLESPACE = %s",
-						  fmtId(tablespace));
-	appendPQExpBufferStr(creaQry, ";\n");
-
-	appendPQExpBuffer(delQry, "DROP DATABASE %s;\n",
-					  qdatname);
 
 	dbDumpId = createDumpId();
 
